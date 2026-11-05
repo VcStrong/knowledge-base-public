@@ -1,0 +1,118 @@
+#!/usr/bin/env python3
+# From 大大王.DT
+"""知识库 adb 守卫：知识库启动的后台会话里，PATH 最前面是这个 adb，其他情况直接交给真正的 adb。
+
+防止不同期（不同分支）的会话往同一台手机装包、操作，互相覆盖、打断测试：
+- 目标手机被别的期（或本人在网页上标了「我在用」）占着时，拒绝装包、卸载、操作界面等命令；只读命令照常放行；
+- 没指定 -s 而连着多台手机时，自动选本期占着的或空闲的那台（设 ANDROID_SERIAL）；
+- 本期第一次往空闲手机装包 / 操作时，自动记为本期占用（30 分钟不用自动释放，会话结束时释放）。
+"""
+import os
+import sys
+import time
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import devlock  # noqa: E402
+
+# 不碰手机状态的命令
+READ = {'devices', 'version', 'help', 'start-server', 'get-state', 'get-serialno', 'get-devpath', 'keygen', 'mdns',
+        'host-features', 'features', 'connect', 'pair', 'disconnect', 'logcat', 'bugreport', 'pull', 'forward',
+        'reverse', 'wait-for-device', 'attach', 'detach'}
+GLOBAL = {'kill-server', 'reconnect'}          # 影响所有手机
+SHELL_READ = {'getprop', 'dumpsys', 'cat', 'ls', 'ps', 'top', 'df', 'id', 'echo', 'date', 'uptime', 'ip', 'ifconfig',
+              'ping', 'getenforce', 'test', 'stat', 'md5sum', 'sha256sum', 'which', 'screencap', 'wc', 'head', 'tail',
+              'grep', 'find', 'uname', 'whoami', 'logcat', 'netstat', 'free', 'du', 'pidof', 'true'}
+OPT_ARG = {'-s', '-t', '-H', '-P', '-L'}
+
+
+def main():
+    argv = sys.argv[1:]
+    real = devlock.real_adb()
+    if not real:
+        sys.exit('[知识库] 找不到真正的 adb（PATH 里没有，ANDROID_HOME 也没设）')
+    period = os.environ.get('KB_PERIOD', '')
+    serial, cmd, rest, pick, i = os.environ.get('ANDROID_SERIAL', ''), '', [], False, 0
+    while i < len(argv):
+        a = argv[i]
+        if a in OPT_ARG:
+            if a == '-s' and i + 1 < len(argv):
+                serial = argv[i + 1]
+            pick = pick or a == '-t'
+            i += 2
+            continue
+        if a in ('-d', '-e'):
+            pick = True
+        elif not a.startswith('-'):
+            cmd, rest = a, argv[i + 1:]
+            break
+        i += 1
+    if not period or not cmd or cmd in READ or cmd.startswith('wait-for') or _from_daemon():
+        os.execv(real, [real] + argv)
+    if cmd in ('shell', 'exec-out'):
+        words = ' '.join(rest).replace(';', ' ').split()
+        w = [x for x in words if '=' not in x][:3]
+        if w and (w[0] in SHELL_READ or (w[0] in ('pm', 'cmd') and len(w) > 1 and w[1] in ('list', 'path', 'package') and
+                                          (w[0] == 'pm' or (len(w) > 2 and w[2] in ('list', 'resolve-activity'))))
+                  or (w[0] in ('settings', 'wm') and len(w) > 1 and w[1] in ('get', 'list', 'size', 'density'))
+                  or (w[0] == 'uiautomator' and len(w) > 1 and w[1] == 'dump')):
+            os.execv(real, [real] + argv)
+    try:
+        with devlock.locked() as data:
+            now = time.time()
+            busy = {k: v for k, v in data.items() if devlock.valid(v, now) and (v.get('期') != period or v.get('方式') == '本人')}
+            if cmd in GLOBAL:
+                if busy:
+                    _deny(f'adb {cmd} 会断开所有手机，而 ' + '、'.join(f'{k} 被{_who(v)}' for k, v in busy.items())
+                          + ' 占着')
+            elif not serial and not pick:
+                devs = [s for s, st, _ in devlock.online(real) if st == 'device']
+                if len(devs) == 1:
+                    serial = devs[0]
+                elif len(devs) > 1:
+                    mine = [s for s in devs if (data.get(s) or {}).get('期') == period and s not in busy]
+                    free = [s for s in devs if s not in busy]
+                    if not (mine or free):
+                        _deny('连着的手机都被占着：' + '、'.join(f'{k} 被{_who(v)}' for k, v in busy.items()))
+                    serial = (mine or free)[0]
+                    os.environ['ANDROID_SERIAL'] = serial
+                    print(f'[知识库] 连着多台手机，自动选用 {serial}（{"本期已占用" if mine else "空闲"}的那台）', file=sys.stderr)
+            if cmd not in GLOBAL and serial in busy:
+                _deny(f'手机 {serial} 正被{_who(busy[serial])}占用')
+            if cmd not in GLOBAL and serial:
+                c = data.get(serial) or {}
+                if c.get('期') != period or not devlock.valid(c, now):
+                    c = {'期': period, '方式': '自动', '开始': devlock.stamp()}
+                c.update(分支=os.environ.get('KB_BRANCH', ''), 仓库=os.environ.get('KB_REPO', ''), 最后使用=now)
+                data[serial] = c
+    except OSError:
+        pass     # 记录写不了（如沙箱限制）不影响用 adb
+    os.execv(real, [real] + argv)
+
+
+def _who(v):
+    return ('本人（网页上标了「我在用」）' if v.get('方式') == '本人' else f'「{v.get("期", "")}」'
+            + (f'（分支 {v["分支"]}）' if v.get('分支') else ''))
+
+
+def _deny(why):
+    print(f'[知识库] {why}。为避免装包覆盖、打断对方测试，已拒绝：adb {" ".join(sys.argv[1:])[:200]}\n'
+          '请用 kb_devices 查看空闲手机、kb_device_claim 申请，只在申请到的手机上操作（adb -s <序列号>）；'
+          '没有空闲手机时先做不需要手机的部分，用 kb_issue 记下「需要几台手机」后继续，不要等待，也不要卸载或覆盖别人的包。',
+          file=sys.stderr)
+    sys.exit(1)
+
+
+def _from_daemon():
+    """agent-device 等常驻服务调用的 adb：环境变量是启动它的那个会话的，认不准是哪一期，不拦。"""
+    try:
+        import subprocess
+        cmd = subprocess.run(['ps', '-o', 'command=', '-p', str(os.getppid())], capture_output=True, text=True,
+                             timeout=3).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return 'agent-device' in cmd
+
+
+if __name__ == '__main__':
+    main()

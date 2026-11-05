@@ -1,0 +1,18 @@
+# 白名单：只有程序和说明文档进仓库；期/、基础/、收件箱/、代码仓库.json、索引、缓存、日志、虚拟环境一律不进
+/*
+!/.gitignore
+!/README.md
+!/kb
+!/install.sh
+!/使用说明.md
+!/安装与移植.md
+!/开发流程设置.md
+!/_system/
+/_system/*
+!/_system/kb.py
+!/_system/fetch.py
+!/_system/web.py
+!/_system/web.html
+!/_system/requirements.txt
+!/_system/devlock.py
+!/_system/bin/

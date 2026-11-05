@@ -1,0 +1,12 @@
+#!/bin/sh
+# From 大大王.DT
+# 知识库命令行入口：按本脚本所在目录定位，装在哪都能用（软链接也行）
+self="$0"
+while [ -L "$self" ]; do
+  link=$(readlink "$self")
+  case "$link" in /*) self="$link" ;; *) self="$(dirname "$self")/$link" ;; esac
+done
+dir=$(cd "$(dirname "$self")" && pwd)
+py="$dir/_system/.venv/bin/python"
+[ -x "$py" ] || { echo "还没安装：先在 $dir 运行 ./install.sh" >&2; exit 1; }
+exec "$py" "$dir/_system/kb.py" "$@"

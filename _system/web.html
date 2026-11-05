@@ -1,0 +1,1033 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>本地知识库</title>
+<meta name="author" content="From 大大王.DT">
+<!-- From 大大王.DT -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root{--bg:#f3f5f9;--fg:#1c2433;--mut:#667085;--card:#ffffff;--line:#e3e7ef;--soft:#eef1f6;--acc:#3b5bdb;--accb:#e7ecfd;
+--side:#1f2a44;--side-fg:#c9d2e6;--side-act:#ffffff;
+--s0:#667085;--s0b:#eef1f6;--s1:#b54708;--s1b:#fdf0e1;--s2:#3b5bdb;--s2b:#e7ecfd;--s3:#1f8a4c;--s3b:#e3f4ea;--s4:#c4321f;--s4b:#fde8e5;--warn:#c4321f;
+--info:#0b6bcb;--infob:#e2effc;--shadow:0 1px 2px rgba(16,24,40,.06),0 1px 3px rgba(16,24,40,.08);
+--f-body:"Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;--f-mono:"JetBrains Mono",ui-monospace,Menlo,monospace}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f141d;--fg:#e6eaf2;--mut:#98a2b3;--card:#171e2a;--line:#283245;--soft:#1e2635;--acc:#7c97ff;--accb:#1f2a4d;
+--side:#111827;--side-fg:#9aa6bf;--side-act:#ffffff;
+--s0:#98a2b3;--s0b:#1e2635;--s1:#f5a454;--s1b:#3a2915;--s2:#7c97ff;--s2b:#1f2a4d;--s3:#4fd08a;--s3b:#173326;--s4:#ff8a7a;--s4b:#3d1c19;--warn:#ff8a7a;
+--info:#6cb4ff;--infob:#15293f;--shadow:0 1px 2px rgba(0,0,0,.4);color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0f141d;--fg:#e6eaf2;--mut:#98a2b3;--card:#171e2a;--line:#283245;--soft:#1e2635;--acc:#7c97ff;--accb:#1f2a4d;
+--side:#111827;--side-fg:#9aa6bf;--side-act:#ffffff;
+--s0:#98a2b3;--s0b:#1e2635;--s1:#f5a454;--s1b:#3a2915;--s2:#7c97ff;--s2b:#1f2a4d;--s3:#4fd08a;--s3b:#173326;--s4:#ff8a7a;--s4b:#3d1c19;--warn:#ff8a7a;
+--info:#6cb4ff;--infob:#15293f;--shadow:0 1px 2px rgba(0,0,0,.4);color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.6 var(--f-body)}
+code,.mono{font-family:var(--f-mono);font-size:12px}
+a{color:var(--acc);text-decoration:none;cursor:pointer}
+/* 布局：左侧固定导航 + 顶部搜索栏 + 内容区 */
+.app{display:grid;grid-template-columns:232px minmax(0,1fr);min-height:100vh}
+.side{background:var(--side);color:var(--side-fg);padding:18px 12px;position:sticky;top:0;height:100vh;overflow:auto;display:flex;flex-direction:column;gap:2px}
+.brand{display:flex;align-items:center;gap:10px;color:var(--side-act);font-weight:700;font-size:16px;padding:4px 10px 14px}
+.brand i{display:grid;place-items:center;width:30px;height:30px;border-radius:8px;background:var(--acc);color:#fff;font-style:normal;font-size:13px}
+.navh{font-size:11px;letter-spacing:.08em;opacity:.55;padding:12px 10px 4px}
+.nav{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;color:var(--side-fg);min-width:0}
+.nav:hover{background:rgba(255,255,255,.06);color:var(--side-act)}
+.nav.on{background:rgba(255,255,255,.12);color:var(--side-act);font-weight:500}
+.nav .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
+.nav .n{font-size:11px;background:rgba(255,255,255,.14);border-radius:999px;padding:0 7px;flex:none}
+.nav .n.w{background:var(--s4);color:#fff}.nav .n.q{background:var(--s1);color:#fff}
+.nav .d{width:7px;height:7px;border-radius:50%;flex:none;background:var(--s0)}
+.side .foot{margin-top:auto;font-size:12px;opacity:.75;padding:10px;display:flex;align-items:center;gap:6px}
+.mainc{min-width:0;display:flex;flex-direction:column}
+.topbar{position:sticky;top:0;z-index:5;background:var(--card);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;padding:10px 20px}
+.topbar form{flex:1;max-width:680px;display:flex;gap:6px;min-width:0}
+.topbar .sp{flex:1}
+@media (max-width:760px){.app{grid-template-columns:minmax(0,1fr)}.topbar{padding:8px 12px}main{padding:14px 12px 50px}.topbar #scope{display:none}.kpi>.small{display:none}.side{position:static;height:auto;flex-direction:row;flex-wrap:wrap}.side .navh,.side .foot,.side .plist{display:none}.brand{width:100%}}
+input,select,textarea,button{font:inherit;color:inherit}
+input[type=text],textarea,select{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 10px}
+input[type=text]{flex:1;min-width:0}
+button{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 12px;cursor:pointer}
+button.pri{background:var(--acc);border-color:var(--acc);color:#fff}
+button:hover{border-color:var(--acc)}
+main{max-width:1280px;width:100%;padding:20px 20px 60px}
+h1{font-size:22px;margin:4px 0 8px}h2{font-size:16px;margin:24px 0 10px}
+.mut{color:var(--mut)}.small{font-size:12px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 14px;box-shadow:var(--shadow)}
+.stat b{display:block;font-size:22px}
+.board{display:grid;grid-template-columns:repeat(5,minmax(200px,1fr));gap:10px;overflow-x:auto;padding-bottom:4px}
+.col{background:var(--soft);border-radius:10px;padding:8px;min-height:120px}
+.col h3{font-size:13px;margin:2px 4px 8px;display:flex;justify-content:space-between}
+.pcard{display:block;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:8px;color:var(--fg)}
+.pcard:hover{border-color:var(--acc)}
+.pcard .t{font-weight:600}
+.chips{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px}
+.chip{font-size:11px;padding:1px 6px;border-radius:999px;background:var(--soft);color:var(--mut)}
+.chip.zero{color:var(--warn)}
+.badge{display:inline-block;font-size:12px;padding:1px 8px;border-radius:999px;font-weight:500}
+.st-收集中{color:var(--s0);background:var(--s0b)}.st-已批准开发{color:var(--s1);background:var(--s1b)}
+.st-开发中{color:var(--s2);background:var(--s2b)}.st-已完成{color:var(--s3);background:var(--s3b)}.st-已暂停{color:var(--s4);background:var(--s4b)}
+table{border-collapse:collapse;width:100%;background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}th{background:var(--soft);font-weight:500}
+.tw{overflow-x:auto}
+.steps{display:flex;gap:0;margin:12px 0 4px;flex-wrap:wrap}
+.step{flex:1;min-width:110px;padding:8px 10px;border-top:3px solid var(--line);color:var(--mut)}
+.step.done{border-color:var(--s3);color:var(--fg)}.step.cur{border-color:var(--acc);color:var(--fg);font-weight:600}
+.step small{display:block;font-weight:400;color:var(--mut)}
+.notice{background:var(--s1b);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin:12px 0;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.notice code{background:var(--card);padding:2px 6px;border-radius:4px}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px}
+@media (max-width:900px){.layout{grid-template-columns:1fr}}
+.cat{background:var(--card);border:1px solid var(--line);border-radius:10px;margin-bottom:12px;box-shadow:var(--shadow)}
+.cat .hd{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--line)}
+.cat .bd{padding:8px 12px}
+details.cat:not([open])>summary.hd{border-bottom:0}
+details.cat>summary.hd::before{content:'▸';margin-right:6px;color:var(--mut)}
+details.cat[open]>summary.hd::before{content:'▾'}
+details.cat>summary.hd{list-style:none}
+details.cat>summary.hd>b{flex:1}
+.drop{border:1.5px dashed var(--line);border-radius:8px;padding:8px;text-align:center;color:var(--mut);font-size:12px;margin-top:8px;cursor:pointer}
+.drop.over{border-color:var(--acc);background:var(--accb);color:var(--acc)}
+.files li{list-style:none;padding:4px 0;border-bottom:1px solid var(--soft);display:flex;justify-content:space-between;gap:8px}
+.files{margin:0;padding:0}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}
+.thumb{border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--soft);cursor:pointer}
+.thumb img{width:100%;height:110px;object-fit:cover;display:block}
+.thumb div{padding:4px 6px;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nonote{color:var(--warn)}
+.tl{max-height:75vh;overflow:auto}
+.tl .it{padding:6px 0;border-bottom:1px solid var(--soft);word-break:break-all}
+.tl .it .a{font-weight:500}
+.hit{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin-bottom:8px}
+.hit .p{font-size:12px;color:var(--mut);word-break:break-all}
+.hit .s{white-space:pre-wrap;word-break:break-word}
+dialog{border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--fg);width:min(1000px,94vw);max-height:90vh;padding:0}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+dialog .hd{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line);gap:8px}
+dialog .bd{padding:12px 14px;overflow:auto;max-height:calc(90vh - 52px)}
+dialog pre{white-space:pre-wrap;word-break:break-word;font-size:12.5px;margin:0}
+dialog img{max-width:100%}
+.toast{position:fixed;right:16px;bottom:16px;background:var(--fg);color:var(--bg);padding:8px 14px;border-radius:8px;opacity:0;transition:.2s;max-width:420px;white-space:pre-wrap;z-index:20}
+.toast.show{opacity:.95}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.note{border:1px solid var(--line);border-left:3px solid var(--acc);border-radius:8px;padding:6px 10px;margin-bottom:6px;background:var(--card)}
+.note.k-分支{border-left-color:var(--s3)}.note.k-链接{border-left-color:var(--s1)}.note.k-其他{border-left-color:var(--s0)}
+.note .nb{white-space:pre-wrap;word-break:break-word;margin-top:2px}
+.note .nu{word-break:break-all;font-size:13px}
+.note .ops{margin-left:auto;display:flex;gap:10px;font-size:12px}
+.form{display:grid;gap:8px}.form label{display:grid;gap:3px;font-size:12px;color:var(--mut)}
+.form input[type=text],.form textarea,.form select{width:100%}
+.dev{background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);padding:14px 16px}
+.dev .top{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.dev .top .sp{flex:1}
+.sw{display:inline-flex;align-items:center;gap:6px;cursor:pointer;user-select:none}
+.sw i{width:34px;height:20px;border-radius:999px;background:var(--line);position:relative;transition:.15s}
+.sw i:after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:.15s}
+.sw.on i{background:var(--acc)}.sw.on i:after{left:16px}
+button.danger{border-color:var(--warn);color:var(--warn)}
+.q{border:1.5px solid var(--s1);background:var(--s1b);border-radius:10px;padding:10px 12px;margin:10px 0}
+.q .ctx{background:var(--card);border-radius:8px;padding:2px 10px;margin:6px 0;font-size:13px}
+.q textarea{width:100%;margin-top:6px}
+.iss{border-left:3px solid var(--warn);background:var(--soft);border-radius:6px;padding:3px 10px;margin:3px 0;font-size:13px}
+.iss details summary{font-size:11px}
+.iss.done{border-left-color:var(--mut);opacity:.75}
+.iss button,.devrow button{font-size:12px;padding:1px 8px}
+.retest{border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin-top:12px}
+.devrow{padding:4px 0;border-bottom:1px solid var(--soft)}
+.chat{margin-top:8px}.chat textarea{width:100%}
+.chat .msg{font-size:12px;padding:2px 0;color:var(--mut)}.chat .msg b{color:var(--fg);font-weight:500}
+.opts{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.prog{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:10px}
+.pst{border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.pst.done{border-color:var(--s3)}.pst.run{border-color:var(--acc);background:var(--accb)}.pst.skip{opacity:.6}
+.pbar{display:flex;height:10px;border-radius:999px;overflow:hidden;background:var(--soft);margin:6px 0}
+.pbar span{display:block;height:100%}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px}
+.legend b{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px}
+.act{max-height:320px;overflow:auto;font-size:12.5px}
+.act div{padding:4px 0;border-bottom:1px solid var(--soft);word-break:break-word;white-space:pre-wrap}
+.live{width:8px;height:8px;border-radius:50%;background:var(--mut);display:inline-block;opacity:.5}.live.on{background:#2ea44f;opacity:1}
+.act .tool{color:var(--mut)}.act .end{font-weight:600}.act .sess{color:var(--acc);font-weight:600;border-bottom:none;padding-top:10px}
+.arec{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px}
+.arec .in{white-space:pre-wrap;word-break:break-all;background:var(--soft);border-radius:6px;padding:6px 8px;margin:6px 0;font-size:12.5px;max-height:90px;overflow:auto}
+.arec .res p{margin:4px 0}
+.bgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:10px}
+.bcard{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.bcard .t{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.bcard table{border:none;margin-top:6px}.bcard td{padding:4px 6px;font-size:13px}.bcard td:first-child{color:var(--mut);width:30%;white-space:nowrap}
+.sec{font-family:ui-monospace,Menlo,monospace}
+.bcard .md{border:none;padding:0;background:none;border-radius:0}
+.frow{display:grid;grid-template-columns:1fr 1.6fr auto auto;gap:6px;align-items:center}
+.docs{display:grid;grid-template-columns:220px minmax(0,1fr);gap:16px;align-items:start}
+@media (max-width:800px){.docs{grid-template-columns:1fr}}
+.dnav{position:sticky;top:64px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px;max-height:calc(100vh - 80px);overflow:auto}
+.dnav a{display:block;padding:5px 8px;border-radius:6px;color:var(--fg)}
+.dnav a.on{background:var(--accb);color:var(--acc);font-weight:600}
+.dnav .toc a{padding:2px 8px 2px 18px;font-size:12px;color:var(--mut)}
+.dnav .toc a.h3{padding-left:30px}
+.md{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 24px 24px;min-width:0}
+.md h1{font-size:22px;margin:16px 0 8px}.md h2{font-size:18px;margin:26px 0 8px;padding-bottom:4px;border-bottom:1px solid var(--line)}
+.md h3{font-size:15px;margin:18px 0 6px}.md h4{font-size:14px;margin:14px 0 4px}
+.md h1,.md h2,.md h3,.md h4{scroll-margin-top:70px}
+.md code{background:var(--soft);padding:1px 5px;border-radius:4px;font-size:12.5px}
+.md pre{background:var(--soft);padding:10px 12px;border-radius:8px;overflow:auto}.md pre code{background:none;padding:0}
+.md blockquote{margin:8px 0;padding:4px 12px;border-left:3px solid var(--line);color:var(--mut)}
+.md ul,.md ol{padding-left:22px;margin:6px 0}.md li{margin:2px 0}.md li>ul,.md li>ol{margin:2px 0}
+.md table{margin:8px 0}.md p{margin:8px 0}
+
+/* 总览：统计卡 → 筛选胶囊 → 期卡片网格 */
+.pagehead{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.pagehead h1{margin:0 0 4px;text-wrap:balance}.pagehead p{margin:0}
+.crumb{font-size:12px;color:var(--mut);margin-bottom:2px}
+.pmeta{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--mut);margin-top:6px}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:16px}
+.kpi{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--c);border-radius:10px;padding:12px 16px;box-shadow:var(--shadow);display:flex;justify-content:space-between;align-items:center;gap:8px;color:var(--fg)}
+.kpi .k{font-size:12px;letter-spacing:.04em;color:var(--c);font-weight:700}
+.kpi .v{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.3}
+.fchips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.fchip{border-radius:999px;padding:4px 13px;font-size:13px;color:var(--mut)}
+.fchip b{font-weight:500;margin-left:5px;opacity:.8}
+.fchip.on{background:var(--acc);border-color:var(--acc);color:#fff}
+.pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+.pcard2{background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);overflow:hidden;display:flex;flex-direction:column;color:var(--fg);transition:transform .15s,box-shadow .15s}
+.pcard2:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(16,24,40,.12)}
+.pcard2 .cover{aspect-ratio:16/7;max-width:100%;position:relative;background:var(--soft);overflow:hidden}
+.pcard2 .cover img{width:100%;height:100%;object-fit:cover;object-position:top;display:block}
+.pcard2 .cover .ph{position:absolute;inset:0;display:grid;place-items:center;font-size:26px;font-weight:700;color:var(--line);letter-spacing:.1em}
+.pcard2 .ctags{position:absolute;left:10px;bottom:10px;display:flex;gap:6px}
+.pcard2 .ctags .badge{box-shadow:0 1px 3px rgba(0,0,0,.15)}
+.pcard2 .pb{padding:12px 14px;display:grid;gap:6px;min-width:0}
+.pcard2 h3{margin:0;font-size:15px;line-height:1.35}
+.pcard2 .sum{color:var(--mut);font-size:13px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.pcard2 .meta{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--mut);font-variant-numeric:tabular-nums;overflow:hidden}
+.pcard2 .meta .zero{color:var(--warn)}
+.pcard2 .pf{border-top:1px solid var(--line);padding:8px 14px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:auto;min-height:38px}
+.pcard2 .pf .lt{margin-left:auto;font-size:11px;color:var(--mut)}
+.st-已暂停2{color:var(--s4);background:var(--s4b)}
+.card2{background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);min-width:0}
+.card2>.bd{padding:12px 14px}
+/* 手机 */
+.phone{display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+.phone:last-child{border-bottom:0}
+.phone .pi{width:20px;height:32px;border:2px solid var(--mut);border-radius:5px;position:relative}
+.phone .pi::after{content:"";position:absolute;bottom:3px;left:50%;width:6px;height:2px;margin-left:-3px;background:currentColor;border-radius:2px;color:var(--mut)}
+.phone.free .pi{border-color:var(--s3)}.phone.mine .pi{border-color:var(--s2)}.phone.busy .pi{border-color:var(--s1)}
+.phone button{font-size:12px;padding:2px 9px}
+/* 期页面：标签页 */
+.ptabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin:14px 0 14px;overflow-x:auto}
+.ptab{padding:9px 16px;color:var(--mut);border-bottom:2px solid transparent;white-space:nowrap}
+.ptab.on{color:var(--acc);border-bottom-color:var(--acc);font-weight:500}
+.ptab .n{font-size:11px;background:var(--soft);color:var(--mut);border-radius:999px;padding:0 7px;margin-left:5px}
+.ptab .n.w{background:var(--s4b);color:var(--s4)}
+.matgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:14px;align-items:start}.matgrid .cat{margin:0}
+.two{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px;align-items:start;margin-top:12px}
+.stack{display:grid;gap:14px;min-width:0;align-content:start}
+.stack>.q{margin:0}
+.issbox .bd>details{margin-top:0!important}
+@media (max-width:1100px){.two{grid-template-columns:minmax(0,1fr)}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:520px){.matgrid{grid-template-columns:1fr}.kpis{grid-template-columns:1fr}}
+@media (prefers-reduced-motion:reduce){.pcard2{transition:none}.pcard2:hover{transform:none}}
+</style>
+</head>
+<body>
+<div class="app">
+<aside class="side" aria-label="主导航">
+  <a class="brand" href="#/"><i>KB</i>本地知识库</a>
+  <div class="navh">工作台</div>
+  <a class="nav" data-nav="/" href="#/"><span class="t">▦ 总览</span></a>
+  <a class="nav" data-nav="/phones" href="#/phones"><span class="t">▯ 手机</span><span class="n" id="navPh"></span></a>
+  <div class="navh">期</div>
+  <div class="plist" id="navPs"></div>
+  <div class="navh">共用</div>
+  <a class="nav" data-nav="/base" href="#/base"><span class="t">◈ 基础信息</span></a>
+  <div class="navh">系统</div>
+  <a class="nav" data-nav="/settings" href="#/settings"><span class="t">⚙ 设置</span></a>
+  <a class="nav" data-nav="/d/" href="#/d/" title="使用说明、开发流程设置、安装与移植"><span class="t">? 帮助</span></a>
+  <div class="foot"><span id="live" class="live" title="实时连接中…"></span><span>实时连接 · 127.0.0.1</span></div>
+</aside>
+<div class="mainc">
+<header class="topbar">
+  <form id="sf"><input type="text" id="q" placeholder="搜索需求、接口字段、设计说明、代码…"><select id="scope"><option value="all">全部</option><option value="docs">资料</option><option value="code">代码</option></select><button class="pri">搜索</button></form>
+  <span class="sp"></span>
+  <button id="addBtn" class="pri" title="模糊添加（随手粘贴网址 + 编号、几句需求、账号……交给 AI 判断放哪、怎么导入）或新建一期">＋ 添加</button>
+</header>
+<main id="app"></main>
+</div>
+</div>
+<span hidden data-sign="From 大大王.DT">From 大大王.DT</span>
+<dialog id="dlg"><div class="hd"><b id="dlgT"></b><button onclick="dlg.close()">关闭</button></div><div class="bd" id="dlgB"></div></dialog>
+<div class="toast" id="toast"></div>
+<script>
+const $=s=>document.querySelector(s), app=$('#app'), dlg=$('#dlg');
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const enc=encodeURIComponent;
+const ORDER=['收集中','已批准开发','开发中','已完成','已暂停'];
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),3500)}
+async function api(u,opt){const r=await fetch(u,opt);const j=await r.json();if(!r.ok){const e=new Error(j.error||r.status);e.need=j.need;throw e}return j}
+const post=(u,b)=>api(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
+const badge=s=>`<span class="badge st-${esc(s)}">${esc(s)}</span>`;
+const fileUrl=p=>'/file?path='+enc(p);
+
+let ovFilter='全部';try{ovFilter=localStorage.getItem('kb.ovFilter')||'全部'}catch(_){}
+const DOT={收集中:'var(--s0)',已批准开发:'var(--info)',开发中:'var(--s2)',已完成:'var(--s3)',已暂停:'var(--s1)'};
+// 左侧导航：期列表（状态色点 + 待确认 / 问题数）、手机空闲数、当前页高亮
+function sideNav(d){
+  if(d){$('#navPs').innerHTML=d.periods.map(p=>`<a class="nav" data-nav="/p/${esc(p.name)}" href="#/p/${enc(p.name)}" title="${esc(p.name)} · ${esc(p.status)}"><span class="d" style="background:${DOT[p.status]||'var(--s0)'}"></span><span class="t">${esc(p.name)}</span>${p.pendingQ?`<span class="n q">${p.pendingQ}</span>`:''}${p.issues?`<span class="n w">${p.issues}</span>`:''}</a>`).join('');
+    $('#navPh').textContent=d.phones?`${d.phones.free}/${d.phones.total}`:''}
+  const h=decodeURIComponent(location.hash.slice(1)||'/');
+  document.querySelectorAll('.side .nav').forEach(a=>{const k=a.dataset.nav;a.classList.toggle('on',k==='/'?h==='/':k==='/d/'?h.startsWith('/d/'):h===k)});
+}
+async function navRefresh(){try{sideNav(await api('/api/overview'))}catch(_){}}
+
+async function overview(){
+  const d=await api('/api/overview');
+  try{d.adds=(await api('/api/adds')).items}catch(_){d.adds=[]}
+  sideNav(d);
+  const cnt=s=>d.periods.filter(p=>s==='全部'||p.status===s).length;
+  const sum=k=>d.periods.reduce((a,p)=>a+(p[k]||0),0);
+  const list=d.periods.filter(p=>ovFilter==='全部'||p.status===ovFilter);
+  const tag=(cls,t,tip)=>`<span class="badge ${cls}"${tip?` title="${esc(tip)}"`:''}>${t}</span>`;
+  const card=p=>`<a class="pcard2" href="#/p/${enc(p.name)}">
+    <div class="cover">${p.cover?`<img loading="lazy" src="${fileUrl(p.cover)}" alt="">`:`<div class="ph">${esc((p.name.split('-').slice(1).join('-')||p.name).slice(0,8))}</div>`}
+      <div class="ctags">${badge(p.status)}${p.running?'<span class="badge st-开发中">● 后台开发中</span>':''}</div></div>
+    <div class="pb"><h3>${esc(p.name)}</h3><div class="sum">${esc(p.summary||'（没有简介）')}</div>
+      <div class="meta">${d.cats.map(c=>`<span class="${p.counts[c]?'':'zero'}">${c} ${p.counts[c]}</span>`).join('')}<span class="${p.designImages?'':'zero'}">设计稿 ${p.designImages}</span></div>
+      ${p.branches&&p.branches.length?`<div class="meta mono" title="开发分支">🌿 ${esc(p.branches.join('；'))}</div>`:''}</div>
+    <div class="pf">${p.pendingQ?tag('st-已批准开发',`🔔 ${p.pendingQ} 个待确认`):''}${p.issues?tag('st-已暂停2',`⚠ ${p.issues} 个问题`,'不阻断开发、但要你处理的问题（手机不够、缺账号等）'):''}
+      ${p.retest?tag('st-收集中',`🔁 ${p.autoRetest?'等条件自动复测':'可复测'}`):''}${p.dnd?tag('st-收集中','🌙 免打扰'):''}
+      ${p.sources?tag(p.pendingSources?'st-已暂停2':'st-收集中',`来源 ${p.sources}${p.pendingSources?' · '+p.pendingSources+' 待核对':' · 已核对'}`):''}
+      ${p.staleSources?tag('st-已暂停2',`⚠ ${p.staleSources} 条原文有变化`):''}${p.imagesWithoutNote?tag('st-已暂停2',`${p.imagesWithoutNote} 张图无说明`):''}
+      <span class="lt">${p.lastLog?esc(p.lastLog.time):''}</span></div></a>`;
+  const ph=d.phones;
+  app.innerHTML=`
+  <div class="pagehead"><div><h1>总览</h1><p class="mut">按「期」管理需求、设计稿、接口文档和零散资料；资料齐了就在期里一键开始开发。</p></div>
+    <div class="mut small">已索引资料 ${d.docs} · 代码仓库 ${d.repos.length}${d.inbox.length?` · <b style="color:var(--s1)">收件箱 ${d.inbox.length} 个待整理</b>`:''}</div></div>
+  <section class="kpis">
+    <div class="kpi" style="--c:var(--s2)"><div><div class="k">开发中</div><div class="v">${cnt('开发中')}</div></div><span class="mut small">已批准待开工 ${cnt('已批准开发')}</span></div>
+    <div class="kpi" style="--c:var(--s1)"><div><div class="k">待你确认</div><div class="v">${sum('pendingQ')}</div></div></div>
+    <div class="kpi" style="--c:var(--s4)"><div><div class="k">需要你处理的问题</div><div class="v">${sum('issues')}</div></div><span class="mut small">手机、账号、环境等</span></div>
+    <a class="kpi" href="#/phones" style="--c:var(--s3)"><div><div class="k">空闲手机</div><div class="v">${ph?ph.free+' / '+ph.total:'—'}</div></div><span class="mut small">${ph?'多个期共用':'本机找不到 adb'}</span></a>
+  </section>
+  <div class="fchips">${['全部',...ORDER].map(s=>`<button class="fchip ${s===ovFilter?'on':''}" data-f="${s}">${s}<b>${cnt(s)}</b></button>`).join('')}</div>
+  <section class="pgrid">${list.map(card).join('')||'<p class="mut">这个状态下还没有期。</p>'}</section>
+  ${d.adds&&d.adds.length?`<h2>模糊添加 <a class="small" id="ovAdd" style="font-weight:normal">查看全部</a></h2>${d.adds.slice(0,3).map(addRec).join('')}`:''}
+  ${d.inbox.length?`<h2>收件箱（${d.inbox.length}）</h2>
+  <div class="cat"><div class="bd"><ul class="files">${d.inbox.map(f=>`<li><span>${esc(f.name)}${f.isDir?'/':''}</span><span class="mut small">${size(f.size)}</span></li>`).join('')}</ul>
+  <div class="row" style="margin-top:8px">归档到 <select id="ibP">${d.periods.map(p=>`<option>${esc(p.name)}</option>`).join('')}</select><button class="pri" id="ibGo">自动分类归档</button></div></div></div>`:''}
+  <h2>代码仓库</h2>
+  ${d.repos.length?`<div class="tw"><table><tr><th>名称</th><th>路径</th><th>已索引文件</th><th>登记时间</th></tr>${d.repos.map(r=>`<tr><td>${esc(r.name)}</td><td class="small mono">${esc(r.path)}</td><td>${r.files}</td><td class="small">${esc(r.added)}</td></tr>`).join('')}</table></div>`:'<p class="mut">还没有登记。终端运行 <code>kb repo &lt;代码路径&gt;</code>，或让 Claude 登记。</p>'}
+  <p class="mut small">知识库目录：${esc(d.root)}　·　<a href="#/d/使用说明">使用说明</a></p>`;
+  app.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{ovFilter=b.dataset.f;try{localStorage.setItem('kb.ovFilter',ovFilter)}catch(_){}overview()});
+  if($('#ovAdd'))$('#ovAdd').onclick=()=>addDlg();
+  const g=$('#ibGo');if(g)g.onclick=async()=>{try{const r=await post('/api/inbox',{period:$('#ibP').value});toast(r.msg);render()}catch(e){toast(e.message)}};
+}
+
+// 手机：所有期共用，谁在用、哪个分支
+async function phonesPage(){
+  const r=await api('/api/devices');navRefresh();
+  app.innerHTML=`<div class="pagehead"><div><h1>手机</h1><p class="mut">所有期共用的手机。后台会话只会往申请到的手机装包、操作，不会碰别的期占着的；你自己要用就点「我在用」（4 小时内后台不碰它）。</p></div></div>
+  <div class="card2"><div class="bd" id="phList">${r.items?phoneRows(r.items,''):'<span class="mut">本机找不到 adb：装好 Android SDK platform-tools 后刷新。</span>'}</div></div>`;
+  bindPhones(app,()=>phonesPage());
+}
+const phoneRows=(items,period)=>items.length?items.map(x=>{const c=x['占用'],cls=x['空闲']?'free':!c?'':c['方式']==='本人'||x['本期']?'mine':'busy';
+  const st=x['空闲']?'空闲':!c?esc(x['状态']):(c['方式']==='本人'?'本人在用':x['本期']?'本期占用':`「${esc(c['期'])}」占用${c['分支']?' · 分支 <span class="mono">'+esc(c['分支'])+'</span>':''}`)+` · 最后使用 ${esc(c['最后使用'])}${x['状态']!=='在线'?' · '+esc(x['状态']):''}`;
+  return `<div class="phone ${cls}"><span class="pi"></span><div style="min-width:0"><div><b>${esc(x['型号']||'未知型号')}</b> <span class="mono mut">${esc(x['序列号'])}</span></div>
+    <div class="small mut">${st}${x['agent-device']?` · agent-device 会话 ${esc(x['agent-device']['会话'])}${x['agent-device']['期']?'（'+esc(x['agent-device']['期'])+'）':''}`:''}</div></div>
+    ${c?`<button class="small" data-dm="release" data-sn="${esc(x['序列号'])}" title="解除占用（后台会话还在用的话，它下次操作会重新占用）">释放</button>`:x['空闲']?`<button class="small" data-dm="mine" data-sn="${esc(x['序列号'])}" title="你自己要用这台手机：4 小时内后台会话不会往它装包、操作">我在用</button>`:'<span></span>'}</div>`}).join(''):'<div class="small mut">没有连着的手机</div>';
+function bindPhones(root,after){root.querySelectorAll('[data-dm]').forEach(b=>b.onclick=async()=>{
+  if(b.dataset.dm==='release'&&!confirm(`解除 ${b.dataset.sn} 的占用？`))return;
+  try{const r=await post('/api/device',{serial:b.dataset.sn,action:b.dataset.dm});toast(r.msg);after()}catch(e){toast(e.message)}})}
+
+const size=n=>n>1048576?(n/1048576).toFixed(1)+' MB':n>1024?(n/1024).toFixed(0)+' KB':n+' B';
+const when=t=>new Date(t*1000).toLocaleString('zh-CN',{hour12:false}).slice(0,16);
+
+let ptabs={};try{ptabs=JSON.parse(localStorage.getItem('kb.ptabs')||'{}')}catch(_){}
+async function period(name){
+  const d=await api('/api/period?name='+enc(name)), m=d.meta;
+  const hist=m['状态历史']||[];
+  const lastAt=s=>{for(let i=hist.length-1;i>=0;i--)if(hist[i]['状态']===s)return hist[i]['时间'];return''};
+  const flow=['收集中','已批准开发','开发中','已完成'], ci=flow.indexOf(m['状态']);
+  const steps=flow.map((s,i)=>`<div class="step ${i<ci?'done':i===ci?'cur':''}">${s}<small>${esc(lastAt(s))}</small></div>`).join('');
+  const hasDesign=d.materials['设计图'].some(f=>f.isImage||(f.isDir&&f.images&&f.images.length));
+  const missing=d.cats.filter(c=>c!=='其他资料'&&c!=='设计图'&&!d.materials[c].length&&!d.notes[c].length).concat(hasDesign?[]:['设计稿（Figma / 蓝湖）']);
+  let notice='';
+  if(m['状态']==='收集中')notice=`<div class="notice">${missing.length?`<span>还缺：<b>${missing.join('、')}</b>。</span>`:'<span>材料看起来齐了。</span>'}
+     <span>确认后点下方「开始开发」，或在终端运行</span><code id="apc">kb approve "${esc(d.name)}"</code><button onclick="navigator.clipboard.writeText(document.getElementById('apc').textContent);toast('已复制')">复制</button><span class="mut small">（批准只能本人操作）</span></div>`;
+  if(m['状态']==='已暂停')notice=`<div class="notice">已暂停。</div>`;
+  const catBox=c=>{
+    const items=d.materials[c], h=d.history[c], ns=d.notes[c];
+    const imgs=items.filter(f=>f.isImage), others=items.filter(f=>!f.isImage&&!(f.isDir&&f.images&&f.images.length));
+    const dirImgs=others.filter(f=>f.isDir&&f.images&&f.images.length);
+    const tip={'设计图':'设计稿 · 要实现的产品图，UI 以此为准（Figma / 蓝湖）','需求':'PRD、需求说明；原型图/参考图只用于理解交互'}[c]||'';
+    return `<div class="cat"><div class="hd"><b>${c} <span class="mut">(${items.length+ns.length})</span>${tip?` <span class="mut small" style="font-weight:400">${tip}</span>`:''}</b><span class="row small">${h.length?`<a data-hist="${esc(c)}">历史版本 ${h.length}</a>`:''}<a data-nadd="${esc(c)}">＋ 文字 / 链接</a></span></div><div class="bd">
+      ${ns.map(noteCard).join('')}
+      ${imgs.length?`<div class="grid">${imgs.map(f=>`<div class="thumb" data-img="${esc(f.path)}"><img loading="lazy" src="${fileUrl(f.path)}"><div class="${f.note?'':'nonote'}" title="${esc(f.note)}">${esc(f.name)}${f.note?'':' · 无说明'}</div></div>`).join('')}</div>`:''}
+      ${others.length?`<ul class="files">${others.map(f=>`<li><a data-read="${esc(f.path)}" data-dir="${f.isDir?1:''}">${esc(f.name)}${f.isDir?`/ <span class="mut small">${f.count} 个文件</span>`:''}</a><span class="mut small">${f.isDir?'':size(f.size)+' · '}${when(f.mtime)}</span></li>`).join('')}</ul>`:''}
+      ${dirImgs.map(f=>`<details ${c==='设计图'?'open':''} style="margin-top:8px"><summary class="small"><b>${esc(f.name)}/</b> <span class="mut">${f.images.length} 张${f.name==='原型图'?' · 原型图/参考图，仅供理解交互，UI 以设计稿为准':c==='设计图'?' · 设计稿':''}</span></summary>
+        <div class="grid" style="margin-top:6px">${f.images.map(p=>`<div class="thumb" data-img="${esc(p)}" data-note="${esc((f.notes||{})[p]||'')}"><img loading="lazy" src="${fileUrl(p)}"><div title="${esc((f.notes||{})[p]||'')}">${esc(p.split('/').pop())}</div></div>`).join('')}</div></details>`).join('')}
+      ${c==='设计图'&&!imgs.length&&!dirImgs.length?'<div class="small" style="color:var(--warn);margin-top:6px">还没有设计稿：把需求表里「设计稿地址」（Figma / 蓝湖）发给 Claude 导入，或把导出的画板拖进来</div>':''}
+      ${!items.length&&!ns.length?'<div class="mut small">暂无</div>':''}
+      <div class="drop" data-cat="${esc(c)}">拖文件 / 链接 / 文字到这里，或点击选择文件</div></div></div>`;
+  };
+  const tabs=[['dev','开发',(m['待确认']||[]).filter(q=>q['状态']==='待回答').length+((m['非阻断问题']||[]).filter(q=>q['状态']==='待处理').length)],
+    ['mat','资料',d.cats.reduce((a,c)=>a+d.materials[c].length+d.notes[c].length,0)],
+    ['log','记录',d.log.length]];
+  let tab=(ptabs[d.name]==='src'?'mat':ptabs[d.name])||(m['开发会话']||['已批准开发','开发中','已完成'].includes(m['状态'])?'dev':'mat');
+  const branches=Object.values(d.notes).flat().filter(n=>n['类型']==='分支');
+  const pend=(m['来源']||[]).filter(x=>x['核对']!=='已核对').length;
+  app.innerHTML=`<div class="pagehead"><div style="min-width:0"><div class="crumb"><a href="#/">总览</a> / 期</div>
+      <h1>${esc(d.name)} ${badge(m['状态'])}</h1><div class="mut">${esc(m['说明']||'')}</div>
+      <div class="pmeta">${branches.length?`<span>🌿 开发分支 ${branches.map(n=>`<b class="mono">${esc(noteTitle(n))}</b>`).join('；')}</span>`:''}
+        ${m['开发仓库']?`<span>仓库 <span class="mono">${esc(m['开发仓库'].replace(/^\/Users\/[^/]+/,'~'))}</span></span>`:''}
+        <span>关联仓库 ${esc((m['关联仓库']||[]).join('、')||'无')}</span><span class="mono" title="这一期的资料目录">${esc(d.dir.replace(/^\/Users\/[^/]+/,'~'))}</span></div></div>
+    <div class="row"><label class="small mut" for="stSel">状态</label><select id="stSel">${[...new Set([m['状态'],'收集中','开发中','已完成','已暂停'])].map(s=>`<option ${s===m['状态']?'selected':''}>${s}</option>`).join('')}</select><button id="fixLink" title="设计稿、文档地址给错了：所有地方一起换成正确链接">✎ 更正链接</button></div></div>
+    <div class="steps">${steps}</div>${notice}
+    <nav class="ptabs">${tabs.map(([k,t,n])=>`<a class="ptab ${k===tab?'on':''}" data-tab="${k}">${t}${n?`<span class="n${k==='dev'&&n?' w':''}">${n}</span>`:''}${k==='mat'&&pend?`<span class="n w" title="来源核对">${pend} 待核对</span>`:''}</a>`).join('')}</nav>
+    <div data-pane="dev" ${tab==='dev'?'':'hidden'}><div class="dev" id="devBox">${devCache.name===d.name?devCache.html:'<span class="mut">开发面板加载中…</span>'}</div></div>
+    <div data-pane="mat" ${tab==='mat'?'':'hidden'}>${(m['来源']||[]).length?`<details class="cat" id="srcSec" ${pend||(m['来源']||[]).some(x=>x['待更新'])?'open':''}><summary class="hd" style="cursor:pointer"><b>来源核对 <span class="mut">(${(m['来源']||[]).length})</span> <span class="mut small" style="font-weight:400">从网址导入的资料，逐条和原网页核对</span></b>${pend?`<span class="badge st-已暂停">${pend} 待核对</span>`:'<span class="badge st-已完成">全部已核对</span>'}</summary><div class="bd">${srcBox(d)}</div></details>`:''}
+      <div class="matgrid">${d.cats.map(catBox).join('')}</div></div>
+    <div data-pane="log" ${tab==='log'?'':'hidden'}><div class="card2"><div class="bd">
+      <div class="row" style="margin-bottom:8px"><input type="text" id="logIn" placeholder="追加一条记录…"><button id="logGo">记录</button></div>
+      <div class="tl">${d.log.slice().reverse().map(l=>`<div class="it"><div class="mut small">${esc(l.time)}</div><span class="a">${esc(l.action)}</span>　${esc(l.content)}</div>`).join('')||'<span class="mut">暂无</span>'}</div></div></div></div>`;
+  app.querySelectorAll('[data-tab]').forEach(a=>a.onclick=()=>{ptabs[d.name]=a.dataset.tab;try{localStorage.setItem('kb.ptabs',JSON.stringify(ptabs))}catch(_){}
+    app.querySelectorAll('[data-tab]').forEach(x=>x.classList.toggle('on',x===a));app.querySelectorAll('[data-pane]').forEach(x=>x.hidden=x.dataset.pane!==a.dataset.tab)});
+  devBox(d.name);
+  app.querySelectorAll('[data-read]').forEach(a=>a.onclick=()=>a.dataset.dir?toast('目录：请在 Finder 或让 Claude 查看'):readFile(a.dataset.read));
+  app.querySelectorAll('[data-img]').forEach(a=>a.onclick=()=>showImg(a.dataset.img,d));
+  app.querySelectorAll('[data-hist]').forEach(a=>a.onclick=()=>{const c=a.dataset.hist;openDlg(c+' · 历史版本',`<ul class="files">${d.history[c].map(f=>`<li><a onclick="readFile('${esc(f.path).replace(/'/g,"\\'")}')">${esc(f.name)}</a><span class="mut small">${when(f.mtime)}</span></li>`).join('')}</ul>`)});
+  app.querySelectorAll('.drop').forEach(z=>bindDrop(z,d.name,z.dataset.cat));
+  const allNotes=Object.values(d.notes).flat(), byId=id=>allNotes.find(n=>n['编号']===id);
+  app.querySelectorAll('[data-nadd]').forEach(a=>a.onclick=()=>noteForm(d,{'分类':a.dataset.nadd}));
+  app.querySelectorAll('[data-nedit]').forEach(a=>a.onclick=()=>noteForm(d,byId(a.dataset.nedit)));
+  app.querySelectorAll('[data-ndel]').forEach(a=>a.onclick=async()=>{const n=byId(a.dataset.ndel);
+    if(!confirm(`删除 ${n['编号']}「${noteTitle(n)}」？`))return;
+    try{const r=await post('/api/note',{period:d.name,id:n['编号'],delete:true});toast(r.msg);render()}catch(e){toast(e.message)}});
+  app.querySelectorAll('[data-v]').forEach(b=>b.onclick=async()=>{
+    let note='';if(b.dataset.s==='有问题'){note=prompt('哪里有问题？（会记进记录，Claude 可据此修正）')||'';}
+    try{const r=await post('/api/verify',{period:d.name,sid:b.dataset.v,status:b.dataset.s,note});toast(r.msg);render()}catch(e){toast(e.message)}});
+  const refresh=async(sid,b)=>{b.disabled=true;const t=b.textContent;b.textContent='检查中…';
+    try{const r=await post('/api/refresh',{period:d.name,sid});openDlg('检查更新结果',`<pre style="white-space:pre-wrap">${esc(r.msg)}</pre>`);render()}
+    catch(e){toast(e.message)}finally{b.disabled=false;b.textContent=t}};
+  app.querySelectorAll('[data-refresh]').forEach(b=>b.onclick=()=>refresh(b.dataset.refresh,b));
+  if($('#srcAll'))$('#srcAll').onclick=()=>refresh('',$('#srcAll'));
+  if($('#srcClaude'))$('#srcClaude').onclick=async()=>{try{const r=await post('/api/refresh/claude',{period:d.name});toast(r.msg);render()}catch(e){toast(e.message)}};
+  $('#logGo').onclick=async()=>{const v=$('#logIn').value.trim();if(!v)return;try{await post('/api/log',{period:d.name,note:v});render()}catch(e){toast(e.message)}};
+  $('#fixLink').onclick=()=>fixLinkDlg(d);
+  $('#stSel').title='选另一个状态会先确认再修改';
+  $('#stSel').onchange=async()=>{const sel=$('#stSel'),to=sel.value;
+    if(!confirm(`把「${d.name}」的状态从「${m['状态']}」改为「${to}」？`)){sel.value=m['状态'];return}
+    try{const r=await post('/api/status',{period:d.name,status:to});toast(r.msg);render()}catch(e){toast(e.message);sel.value=m['状态']}};
+}
+
+// 新加了设计稿链接、这一期又有别的设计稿链接：问是不是要替换旧的
+function askReplace(p,r){
+  if(!r||!r.replace||!r.replace.length)return;
+  openDlg('要替换旧的设计稿链接吗？',`<div class="small" style="margin-bottom:8px">新链接：<span class="mut">${esc(r.new)}</span></div>
+    <div class="small">这一期还有别的设计稿链接。如果新链接是用来<b>替换</b>旧的，选中旧链接点「替换」：文档、SDD 配置里的旧链接会一起换掉，开发会话会重新下载设计稿。只是补充一个页面就点「不替换」。</div>
+    ${r.replace.map((u,i)=>`<label class="small" style="display:block;margin-top:6px"><input type="checkbox" value="${i}" checked> ${esc(u)}</label>`).join('')}
+    <div class="row" style="margin-top:10px"><button class="pri" id="rpGo">替换</button><button id="rpNo">不替换</button></div>`);
+  $('#rpNo').onclick=()=>dlg.close();
+  $('#rpGo').onclick=async()=>{const b=$('#rpGo');b.disabled=true;b.textContent='处理中…';const out=[];
+    for(const c of $('#dlgB').querySelectorAll('input[type=checkbox]:checked')){
+      try{out.push((await post('/api/fixlink',{period:p,old:r.replace[+c.value],new:r.new,reason:'网页新加设计稿链接时选择替换'})).msg)}catch(e){out.push('失败：'+e.message)}}
+    openDlg('替换结果',`<pre style="white-space:pre-wrap">${esc(out.join('\n\n')||'没有选择')}</pre>`);render()};
+}
+
+async function fixLinkDlg(d){
+  let ls=[];try{ls=await api('/api/links?name='+enc(d.name))}catch(e){return toast(e.message)}
+  if(!ls.length)return toast('这一期还没有链接');
+  openDlg('更正链接',`<div class="mut small" style="margin-bottom:8px">把给错的链接换成正确的：文档、文字资料、来源、SDD 配置（sdd-start.md）一起改，旧内容进历史版本；新链接是设计稿会自动导入；正在开发时会提醒开发会话重新下载物料。</div>
+    <label class="small">错误的链接</label><select id="flOld" style="width:100%">${ls.map((x,i)=>`<option value="${i}">${esc(x['链接'].length>90?x['链接'].slice(0,90)+'…':x['链接'])}　〔${esc(x['出处'].join('、'))}〕</option>`).join('')}</select>
+    <label class="small" style="margin-top:8px;display:block">正确的链接</label><input type="text" id="flNew" style="width:100%" placeholder="https://www.figma.com/design/…?node-id=…">
+    <label class="small" style="margin-top:8px;display:block">原因（可空）</label><input type="text" id="flWhy" style="width:100%" placeholder="如：设计稿给错了版本">
+    <div class="row" style="margin-top:10px"><button class="pri" id="flGo">更正</button></div>`);
+  $('#flGo').onclick=async()=>{const b=$('#flGo');b.disabled=true;b.textContent='处理中…';
+    try{const r=await post('/api/fixlink',{period:d.name,old:ls[+$('#flOld').value]['链接'],new:$('#flNew').value.trim(),reason:$('#flWhy').value.trim()});
+      openDlg('更正结果',`<pre style="white-space:pre-wrap">${esc(r.msg)}</pre>`);render()}
+    catch(e){toast(e.message);b.disabled=false;b.textContent='更正'}};
+}
+
+const VCLS={'待核对':'st-已批准开发','已核对':'st-已完成','有问题':'st-已暂停'};
+function srcBox(d){
+  const ss=d.meta['来源']||[];if(!ss.length)return'';
+  const pend=ss.filter(s=>s['核对']!=='已核对').length;
+  const base=d.dir+'/';
+  const fl=f=>`<a data-read="${esc(base+f)}">${esc(f)}</a>`;
+  const IMG=/\.(png|jpe?g|gif|webp|bmp|heic|tiff?)$/i;
+  const flist=fs=>{const docs=fs.filter(f=>!IMG.test(f)), g={};fs.filter(f=>IMG.test(f)).forEach(f=>{const k=f.slice(0,f.lastIndexOf('/')+1);g[k]=(g[k]||0)+1});
+    return docs.map(fl).concat(Object.entries(g).map(([k,n])=>`<span class="mut">${esc(k)}</span> ${n} 张图`)).join('<br>')};
+  const stale=ss.filter(s=>s['待更新']).map(s=>s['编号']), up=d.meta['更新会话']||{}, upRun=up['状态']==='运行中';
+  const ar=d.autoRefresh||{};
+  return `<div class="small mut" style="margin-bottom:8px">共 ${ss.length} 条${pend?'，<b style="color:var(--warn)">'+pend+' 条待核对</b>':'，全部已核对'}：逐条确认导入的内容和原网页一致</div>
+  <div class="row" style="margin-bottom:8px;align-items:center">
+    <button id="srcAll" title="按登记的网址重新抓取，原文没变不会改动任何文件">⟳ 全部检查更新</button>
+    ${stale.length?(upRun?`<span class="badge st-开发中">Claude 正在更新 ${esc((up['来源']||[]).join('、'))}…</span>`
+      :`<button id="srcClaude" class="pri">交给 Claude 更新 ${esc(stale.join('、'))}</button>`):''}
+    <span class="mut small">${ar.hours>0?`自动检查：每 ${ar.hours} 小时${ar.last?'，上次 '+esc(ar.last)+'（'+esc(ar.result)+'）':''}${ar.next?'，下次 '+esc(ar.next):''}`:'自动检查已关闭'}</span>
+  </div>
+  ${stale.length&&!upRun?`<div class="small" style="color:var(--warn);margin-bottom:8px">⚠ ${esc(stale.join('、'))} 只导入了页面里的某个条目，原文在条目范围内有改动：快照已更新，条目文档需要重新整理。点「交给 Claude 更新」在后台处理，或在对话里让 Claude 更新。</div>`:''}
+  ${up['状态']==='已结束'&&up['结束时间']?`<div class="small mut" style="margin-bottom:8px">上次条目更新：${esc(up['结束时间'])}${up['出错']?'（有错误）':''}${up['结果']?' — '+esc(up['结果'].slice(0,200)):''}</div>`:''}
+  <div class="tw"><table><tr><th>编号</th><th>来源</th><th>条目 / 简介</th><th>本地文件</th><th>核对</th></tr>
+  ${ss.slice().reverse().map(s=>`<tr>
+    <td>${esc(s['编号'])}<div class="small mut">${esc(s['类型']||'资料')}</div></td>
+    <td><a href="${esc(s['地址'])}" target="_blank" rel="noopener">${esc(s['标题'])} ↗</a>
+      <div class="mut small">${s['页面版本']?'v'+esc(s['页面版本'])+' · ':''}${esc(s['最后修改']||'')}</div>
+      <div class="mut small">抓取 ${esc(s['抓取时间'])}</div>
+      ${s['检查时间']?`<div class="small ${['已更新','条目待更新','失败'].includes(s['检查结果'])?'':'mut'}" ${s['检查结果']==='失败'?'style="color:var(--warn)"':''}>检查 ${esc(s['检查时间'])} · ${esc(s['检查结果']||'')}${s['检查说明']&&s['检查结果']==='失败'?'：'+esc(s['检查说明']):''}</div>`:''}
+      ${s['待更新']?'<div class="small" style="color:var(--warn)">⚠ 原文已变化，条目待更新</div>':''}
+      ${(s['变更记录']||[]).slice(-3).reverse().map(c=>`<div class="small">变更 ${esc(c['时间'])} · ${esc(c['版本'])} · ${esc(c['改动'])} · ${esc(c['处理'])} <a data-read="${esc(base+c['差异'])}">差异</a></div>`).join('')}
+      <button class="small" style="margin-top:4px" data-refresh="${esc(s['编号'])}">⟳ 检查更新</button></td>
+    <td>${s['条目']?'<b>'+esc(s['条目'])+'</b><br>':''}${esc(s['简介'])}</td>
+    <td class="small">${flist(s['文件']||[])}${s['快照']?`<br><span class="mut">快照：</span>${fl(s['快照'])}`:''}</td>
+    <td style="min-width:150px">${badge2(s['核对'])}${s['核对备注']?'<div class="small mut">'+esc(s['核对备注'])+'</div>':''}
+      <div class="row" style="margin-top:6px"><button class="small" data-v="${esc(s['编号'])}" data-s="已核对">✓ 正确</button><button class="small" data-v="${esc(s['编号'])}" data-s="有问题">✗ 有问题</button></div></td>
+  </tr>`).join('')}</table></div>`;
+}
+const badge2=s=>`<span class="badge ${VCLS[s]||''}">${esc(s)}</span>`;
+function bindDrop(z,p,c){
+  const pick=document.createElement('input');pick.type='file';pick.multiple=true;
+  z.onclick=()=>pick.click();pick.onchange=()=>upload([...pick.files],p,c);
+  z.ondragover=e=>{e.preventDefault();z.classList.add('over')};z.ondragleave=()=>z.classList.remove('over');
+  z.ondrop=async e=>{e.preventDefault();z.classList.remove('over');const fs=[...e.dataTransfer.files];
+    if(fs.length)return upload(fs,p,c);
+    const u=(e.dataTransfer.getData('text/uri-list')||'').split('\n').find(x=>x&&!x.startsWith('#'))||'', t=e.dataTransfer.getData('text/plain')||'';
+    if(!u&&!t.trim())return;
+    try{const r=await post('/api/note',{period:p,category:c,content:u&&t.trim()===u?'':t,url:u});toast(r.msg.split('\n')[0]);render();askReplace(p,r)}catch(err){toast(err.message)}};
+}
+async function upload(files,p,c){
+  for(const f of files){
+    if(!f.size&&!f.type){toast(`跳过 ${f.name}：文件夹请用 kb add 或让 Claude 归档`);continue}
+    toast(`上传 ${f.name}…`);
+    try{const r=await api('/api/upload',{method:'POST',headers:{'X-Period':enc(p),'X-Category':enc(c),'X-Filename':enc(f.name)},body:f});toast(r.msg.split('\n')[0])}
+    catch(e){toast(`${f.name}：${e.message}`)}
+  }
+  render();
+}
+const noteTitle=n=>n['显示标题']||n['标题']||'';
+function noteCard(n){
+  return `<div class="note k-${esc(n['类型'])}"><div class="row"><span class="badge st-收集中">${esc(n['类型'])}</span>
+    ${n['标题']?`<b>${esc(n['标题'])}</b>`:''}<span class="mut small">${esc(n['编号'])} · ${esc(n['更新时间']||n['时间'])}${n['来自']?' · 来自 '+esc(n['来自']):''}</span>
+    <span class="ops"><a data-nedit="${esc(n['编号'])}">编辑</a><a data-ndel="${esc(n['编号'])}">删除</a></span></div>
+    ${n['链接']?`<div class="nu"><a href="${esc(n['链接'])}" target="_blank" rel="noopener">${esc(n['链接'])} ↗</a></div>`:''}
+    ${n['内容']&&n['内容']!==n['链接']?`<div class="nb">${esc(n['内容'])}</div>`:''}</div>`;
+}
+function noteForm(d,n){
+  const isNew=!n['编号'], opt=(arr,v,first)=>(first?`<option value="">${first}</option>`:'')+arr.map(x=>`<option ${x===v?'selected':''}>${esc(x)}</option>`).join('');
+  openDlg(isNew?'记一条文字资料':`编辑 ${n['编号']}`,`<div class="form">
+    <div class="mut small">不必是完整材料：产品说的几句话、要开发的分支、别的小组给的文档地址…都可以先记下。</div>
+    <div class="row"><label style="flex:1">分类<select id="nfC">${opt(d.cats,n['分类'])}</select></label>
+      <label style="flex:1">类型<select id="nfK">${opt(d.noteKinds,n['类型'],'自动判断')}</select></label></div>
+    <label>内容<textarea id="nfT" rows="6" placeholder="原样粘贴，如：产品：连续签到满 7 天弹奖励弹窗，奖励金额后台可配">${esc(n['内容']||'')}</textarea></label>
+    <label>链接（可空）<input type="text" id="nfU" value="${esc(n['链接']||'')}" placeholder="https://…"></label>
+    <div class="row"><label style="flex:1">标题（可空）<input type="text" id="nfN" value="${esc(n['标题']||'')}"></label>
+      <label style="flex:1">来自（可空）<input type="text" id="nfF" value="${esc(n['来自']||'')}" placeholder="如：产品 小王 / 服务端组"></label></div>
+    <div class="row"><button class="pri" id="nfGo">保存</button><span class="mut small">⌘ + 回车 保存</span></div></div>`);
+  const go=async()=>{const b={period:d.name,id:n['编号']||'',category:$('#nfC').value,kind:$('#nfK').value,
+      content:$('#nfT').value,url:$('#nfU').value,title:$('#nfN').value,source:$('#nfF').value};
+    try{const r=await post('/api/note',b);dlg.close();toast(r.msg.split('\n')[0]);render();askReplace(d.name,r)}catch(e){toast(e.message)}};
+  $('#nfGo').onclick=go;$('#dlgB').onkeydown=e=>{if(e.key==='Enter'&&(e.metaKey||e.ctrlKey))go()};
+  $('#nfT').focus();
+}
+// ---------------- 模糊添加：随手粘贴，后台 Claude 判断归属并导入
+const addRec=x=>{const run=x['状态']==='运行中';
+  return `<div class="arec"><div class="row small"><b>${run?'⏳ 整理中':x['出错']||x['退出码']?'❌ 出错':'✅ 已完成'}</b>
+    <span class="mut">${esc(x['开始时间'])}${x['期']?' · 指定：'+esc(x['期']):''}${run?' · 已运行 <span data-since="'+esc(x['开始时间'])+'">'+since(x['开始时间'])+'</span>':''}</span></div>
+    <div class="in">${esc(x['输入'])}</div>
+    ${run?`<div class="act">${(x['动作']||[]).map(actLine).join('')||'<div class="mut">启动中…</div>'}</div>`
+      :`<div class="res">${x['结果']?md(x['结果']).html:'<span class="mut">没有返回结果，可能被中断了</span>'}</div>`}</div>`};
+async function addList(){const b=$('#adList');if(!b)return;
+  try{const xs=(await api('/api/adds')).items;b.innerHTML=xs.map(addRec).join('')||'<p class="mut small">还没有记录</p>'}catch(e){b.textContent=e.message}}
+async function addDlg(tab){
+  let ps=[];try{ps=(await api('/api/overview')).periods.map(p=>p.name)}catch(_){}
+  const cur=curPeriod();
+  openDlg('添加',`<div class="row" style="margin-bottom:10px;gap:6px"><button id="tabAdd">✨ 模糊添加</button><button id="tabNew">＋ 新建一期</button></div>
+    <div id="paneNew" style="display:none;gap:8px"><input type="text" id="nN" placeholder="期名，如 2026-11-签到活动v2"><textarea id="nS" rows="3" placeholder="简介（可空）"></textarea>
+      <div class="row"><button class="pri" id="nGo">创建</button><span class="mut small">只想把资料放进去、不确定放哪一期时，用「模糊添加」，对不上会自动新建</span></div></div>
+    <div id="paneAdd" style="display:grid;gap:8px">
+    <textarea id="adT" rows="6" placeholder="随手粘贴，Claude 会按知识库规则判断放进哪一期、怎么导入。例如：&#10;https://confluence.example.com/pages/viewpage.action?pageId=67990565 编号8&#10;产品说：连续签到满 7 天才弹奖励弹窗&#10;测试账号 13800000000 / 密码 xxx（会存进基础知识库，密码只进钥匙串）"></textarea>
+    <div class="row"><label>放进<select id="adP"><option value="">自动判断（对不上会新建一期）</option>${ps.map(n=>`<option ${n===cur?'selected':''}>${esc(n)}</option>`).join('')}</select></label>
+      <button class="pri" id="adGo">交给 Claude 添加</button><span class="mut small">⌘ + 回车 提交 · 后台运行，可关掉弹窗</span></div>
+    <h3 style="margin:8px 0 0">最近记录</h3><div id="adList"><span class="mut small">加载中…</span></div></div>`);
+  const show=t=>{$('#paneAdd').style.display=t==='new'?'none':'grid';$('#paneNew').style.display=t==='new'?'grid':'none';
+    $('#tabAdd').classList.toggle('pri',t!=='new');$('#tabNew').classList.toggle('pri',t==='new');(t==='new'?$('#nN'):$('#adT')).focus()};
+  $('#tabAdd').onclick=()=>show('add');$('#tabNew').onclick=()=>show('new');
+  $('#nGo').onclick=async()=>{try{const n=$('#nN').value.trim();await post('/api/new',{name:n,summary:$('#nS').value});dlg.close();location.hash='#/p/'+enc(n)}catch(e){toast(e.message)}};
+  $('#nN').onkeydown=e=>{if(e.key==='Enter')$('#nGo').click()};
+  const go=async()=>{const t=$('#adT').value.trim();if(!t)return toast('请粘贴要添加的内容');
+    try{const r=await post('/api/add',{text:t,period:$('#adP').value});toast(r.msg);$('#adT').value='';addList()}catch(e){toast(e.message)}};
+  $('#adGo').onclick=go;$('#adT').onkeydown=e=>{if(e.key==='Enter'&&(e.metaKey||e.ctrlKey))go()};
+  show(tab||'add');addList();
+}
+function openDlg(t,h){$('#dlgT').textContent=t;$('#dlgB').innerHTML=h;$('#dlgB').onkeydown=null;dlg.showModal()}
+async function readFile(p,start){
+  try{const r=await api('/api/read?path='+enc(p)+'&start='+(start||1));openDlg(p.split('/').pop(),`<pre>${esc(r.text)}</pre>`)}catch(e){toast(e.message)}
+}
+function showImg(p){
+  const el=[...document.querySelectorAll('[data-img]')].find(x=>x.dataset.img===p);
+  const note=el?.dataset.note||el?.querySelector('div')?.title||'';
+  openDlg(p.split('/').pop(),`${note?`<p style="white-space:pre-wrap">${esc(note)}</p>`:'<p class="mut">暂无说明，可让 Claude「把设计图都看一遍补上说明」</p>'}<img src="${fileUrl(p)}">`);
+}
+
+async function search(q,scope){
+  $('#q').value=q;$('#scope').value=scope||'all';
+  app.innerHTML='<p class="mut">搜索中…</p>';
+  try{
+    const r=await api(`/api/search?q=${enc(q)}&scope=${enc(scope||'all')}`);
+    app.innerHTML=`<h1>「${esc(q)}」</h1><p class="mut">${r.hits.length} 条${r.hits.length?'（匹配'+esc(r.mode)+'）':''}</p>`+
+      r.hits.map(h=>`<div class="hit"><div class="row"><span class="badge ${h.kind==='code'?'st-开发中':'st-收集中'}">${h.kind==='code'?'代码 · '+esc(h.repo):esc(h.period)+' · '+esc(h.cat||'其他')}</span>
+      <a data-p="${esc(h.path)}" data-l="${h.line}">${esc(h.path.split('/').pop())}:${h.line}</a>${h.kind==='doc'&&h.period?`<a class="small" href="#/p/${enc(h.period)}">打开这一期</a>`:''}</div>
+      <div class="p">${esc(h.path)}</div><div class="s">${esc(h.snippet.replaceAll(' ⏎ ','\n'))}</div></div>`).join('');
+    app.querySelectorAll('[data-p]').forEach(a=>a.onclick=()=>readFile(a.dataset.p,Math.max(1,+a.dataset.l-5)));
+  }catch(e){app.innerHTML=`<p>${esc(e.message)}</p>`}
+}
+
+// 轻量 Markdown 渲染：标题、列表（可嵌套）、表格、代码块、引用、行内代码 / 粗体 / 链接
+function mdInline(t){
+  const codes=[];t=esc(t).replace(/`([^`]+)`/g,(_,c)=>{codes.push(c);return '\u0000'+(codes.length-1)+'\u0000'});
+  t=t.replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>')
+     .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g,(_,a,u)=>`<a href="${u}" target="_blank" rel="noopener">${a}</a>`)
+     .replace(/(^|[\s（(：:])(https?:\/\/[^\s<）)，。]+)/g,'$1<a href="$2" target="_blank" rel="noopener">$2</a>');
+  return t.replace(/\u0000(\d+)\u0000/g,(_,i)=>`<code>${codes[i]}</code>`);
+}
+function md(src){
+  const L=src.replace(/\r/g,'').split('\n'),out=[],toc=[];let i=0;
+  const isList=l=>/^\s*([-*+]|\d+\.)\s+/.test(l);
+  while(i<L.length){
+    const l=L[i];
+    if(/^```/.test(l)){const b=[];i++;while(i<L.length&&!/^```/.test(L[i]))b.push(L[i++]);i++;out.push(`<pre><code>${esc(b.join('\n'))}</code></pre>`);continue}
+    let m=l.match(/^(#{1,4})\s+(.*)$/);
+    if(m){const n=m[1].length,id='h'+toc.length;toc.push({n,id,t:m[2].replace(/[`*]/g,'')});out.push(`<h${n} id="${id}">${mdInline(m[2])}</h${n}>`);i++;continue}
+    if(/^\s*(---+|\*\*\*+)\s*$/.test(l)){out.push('<hr>');i++;continue}
+    if(/^>/.test(l)){const b=[];while(i<L.length&&/^>/.test(L[i]))b.push(L[i++].replace(/^>\s?/,''));out.push(`<blockquote>${b.map(mdInline).join('<br>')}</blockquote>`);continue}
+    if(/^\|/.test(l)&&i+1<L.length&&/^\|?\s*:?-+/.test(L[i+1])){
+      const row=r=>r.trim().replace(/^\||\|$/g,'').split(/(?<!\\)\|/).map(c=>mdInline(c.trim().replace(/\\\|/g,'|')));
+      const h=row(l);i+=2;const rs=[];while(i<L.length&&/^\|/.test(L[i]))rs.push(row(L[i++]));
+      out.push(`<div class="tw"><table><tr>${h.map(c=>`<th>${c}</th>`).join('')}</tr>${rs.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</table></div>`);continue}
+    if(isList(l)){
+      const items=[];while(i<L.length&&(isList(L[i])||(/^\s{2,}\S/.test(L[i])&&items.length))){
+        const mm=L[i].match(/^(\s*)([-*+]|\d+\.)\s+(.*)$/);
+        if(mm)items.push({d:Math.floor(mm[1].length/2),o:/\d/.test(mm[2]),t:mm[3]});else items[items.length-1].t+=' '+L[i].trim();i++}
+      let h='',st=[];
+      for(const it of items){
+        while(st.length>it.d+1)h+=`</li></${st.pop()}>`;
+        if(st.length<it.d+1){const tg=it.o?'ol':'ul';h+=`<${tg}>`;st.push(tg)}else h+='</li>';
+        h+=`<li>${mdInline(it.t)}`}
+      while(st.length)h+=`</li></${st.pop()}>`;out.push(h);continue}
+    if(!l.trim()){i++;continue}
+    const p=[];while(i<L.length&&L[i].trim()&&!/^(#{1,4}\s|```|>|\|)/.test(L[i])&&!isList(L[i]))p.push(L[i++]);
+    out.push(`<p>${p.map(mdInline).join('<br>')}</p>`);
+  }
+  return {html:out.join('\n'),toc};
+}
+async function docs(name){
+  const list=(await api('/api/docs')).docs;
+  if(!list.length){app.innerHTML='<p class="mut">知识库根目录下还没有说明文档（.md）。</p>';return}
+  const cur=list.find(x=>x.name===name)||list[0];
+  const d=await api('/api/doc?name='+enc(cur.name)),r=md(d.text);
+  app.innerHTML=`<div class="docs"><nav class="dnav">${list.map(x=>`<a href="#/d/${enc(x.name)}" class="${x.name===cur.name?'on':''}">${esc(x.name)}</a>
+    ${x.name===cur.name?`<div class="toc">${r.toc.filter(t=>t.n>1&&t.n<4).map(t=>`<a class="h${t.n}" data-id="${t.id}">${esc(t.t)}</a>`).join('')}</div>`:''}`).join('')}</nav>
+    <article class="md">${r.html}<p class="mut small" style="margin-top:24px">${esc(d.path)}　·　更新于 ${when(d.mtime)}</p></article></div>`;
+  app.querySelectorAll('.toc a').forEach(a=>a.onclick=()=>document.getElementById(a.dataset.id).scrollIntoView({behavior:'smooth'}));
+}
+
+
+// ---------------- 开发面板：开始/停止、免打扰、待确认、进度、最近动作
+const drafts={};let devPending='';
+// 开发面板每 5 秒刷新：内容没变不重画；鼠标停在「最近动作」上时暂停；重画后保留滚动位置和展开状态
+const devCache={name:'',html:'',sig:''};
+const actLine=a=>a['类型']==='工具'?`<div class="tool">${a['子任务']?'↳ ':''}🔧 ${esc(a['工具'])}　${esc(a['内容'])}</div>`
+  :a['类型']==='结束'?`<div class="end">${a['出错']?'❌':'🏁'} ${esc(a['内容'])}</div>`
+  :a['类型']==='会话'?`<div class="sess">── 会话 ${esc(a['内容'])} ──</div>`:`<div>💬 ${esc(a['内容'])}</div>`;
+async function allActs(name){
+  let a;try{a=await api('/api/dev/activity?name='+enc(name))}catch(e){return toast(e.message)}
+  openDlg('全部开发动作（不自动刷新）',a.length?`<div class="small mut" style="margin-bottom:6px">共 ${a.length} 条，最新的在最下面</div><div class="act" style="max-height:70vh">${a.map(actLine).join('')}</div>`:'<span class="mut">暂无</span>');
+  const el=$('#dlgB').querySelector('.act');if(el)el.scrollTop=el.scrollHeight;
+}
+const STEP={done:['done','✓ 完成'],skipped:['skip','跳过'],pending:['','未开始']};
+const fileLink=(p,t)=>p?`<a data-rf="${esc(p)}">${esc(t||p.split('/').pop())}</a>`:'';
+function since(t){const ms=Date.now()-new Date(String(t).replace(' ','T')).getTime();if(!(ms>0))return'';const m=Math.floor(ms/60000);return m<60?m+' 分钟':Math.floor(m/60)+' 小时 '+(m%60)+' 分钟'}
+async function devBox(name){
+  const box=$('#devBox');if(!box)return;
+  let v;try{v=await api('/api/dev?name='+enc(name))}catch(e){box.innerHTML=`<span class="mut">${esc(e.message)}</span>`;return}
+  if(!$('#devBox'))return;
+  const sig=JSON.stringify(v);
+  if(box.dataset.sig===sig)return;
+  if(box.dataset.sig&&document.activeElement&&box.contains(document.activeElement)&&document.activeElement.matches('textarea,input')){devPending=name;return}   // 正在填回答，填完再刷新
+  const keep={};box.querySelectorAll('details[data-k]').forEach(x=>keep[x.dataset.k]=x.open);
+  const oa=box.querySelector('.act'),oTop=oa?oa.scrollTop:0,oH=oa?oa.scrollHeight:0;
+  const s=v['会话'],run=s&&s['状态']==='运行中',pg=v['进度'];
+  const pend=v['待确认'].filter(q=>q['状态']==='待回答'),done=v['待确认'].filter(q=>q['状态']!=='待回答').reverse();
+  const sess=!s?'<span class="mut">还没有启动过后台开发</span>':run?`<span class="badge st-开发中">● 后台${s['类型']==='复测'?'复测':'开发'}中</span> <span class="small mut">已运行 <span data-since="${esc(s['开始时间'])}">${since(s['开始时间'])}</span> · ${esc((s['仓库']||'').split('/').pop())} · ${esc(s['分支']||'')} · ${esc(s['权限']||'')}${s['续跑次数']?' · 已自动续跑 '+s['续跑次数']+' 次':''}</span>`
+    :`<span class="badge st-${s['状态']==='已结束'&&!s['出错']&&!s['退出码']?'已完成':'已暂停'}">${esc(s['状态'])}</span> <span class="small mut">${esc(s['结束时间']||'')}${s['退出码']?' · 退出码 '+s['退出码']:''}${s['费用']?' · $'+(+s['费用']).toFixed(2):''}${s['续跑次数']?' · 自动续跑 '+s['续跑次数']+' 次':''}</span>${s['未续跑原因']?`<div class="small" style="color:var(--warn)">${esc(s['未续跑原因'])}</div>`:''}`;
+  const can=!['已完成'].includes(v['状态']);
+  const rt=v['复测']||{},ts2=rt['测试'],plan=rt['待复测'],phones=v['设备'];
+  const freeN=phones?phones.filter(x=>x['空闲']||x['本期']).length:0;
+  const btn=(run?`<button class="danger" id="dvStop">■ 停止${s['类型']==='复测'?'复测':'开发'}</button>`:can?`<button class="pri" id="dvStart">▶ ${s?'继续开发':'开始开发'}</button>`:'')
+    +(!run&&ts2?'<button id="dvRetest" title="开发时手机不够、没连手机等没测成的 case，条件具备后补测">🔁 复测</button>':'');
+  const URG=['设备不足','账号','环境'],KINDS=['设备不足','账号','环境','未验证','待排查','工具链','其他'];
+  const iss=v['非阻断问题']||[],openI=iss.filter(x=>x['状态']==='待处理'),doneI=iss.filter(x=>x['状态']!=='待处理').reverse();
+  const issCard=x=>`<div class="iss${x['状态']==='待处理'?'':' done'}" data-i="${esc(x['编号'])}"><div class="row" style="gap:6px;align-items:baseline"><b style="flex:1">${esc(x['标题'])}</b>
+    <span class="mut small">${esc(x['编号'])} · ${esc(x['来源'])}${x['状态']!=='待处理'?' · '+esc(x['状态']):''}</span>
+    ${x['状态']==='待处理'?'<button data-is="已处理">✓ 已处理</button><button data-is="已忽略">忽略</button>':'<button data-is="待处理">恢复</button>'}</div>
+    ${x['详情']?`<details class="small"><summary class="mut">详情</summary><div class="md">${md(x['详情']).html}</div></details>`:''}</div>`;
+  const issHtml=iss.length?`<details data-k="iss" ${openI.some(x=>URG.includes(x['类型']))?'open':''} style="margin-top:12px">
+    <summary class="small"><b style="color:var(--warn)">⚠ 不阻断开发、需要你处理的问题</b>（待处理 ${openI.length}${doneI.length?' · 已处理 '+doneI.length:''}）<span class="mut">　手机不够、缺账号、环境不满足等；处理好后点「🔁 复测」补测</span></summary>
+    ${KINDS.filter(k=>openI.some(x=>x['类型']===k)).map(k=>{const xs=openI.filter(x=>x['类型']===k);
+      return `<details data-k="iss-${k}" ${URG.includes(k)?'open':''}><summary class="small"><b>${k}</b>（${xs.length}）</summary>${xs.map(issCard).join('')}</details>`}).join('')}
+    ${doneI.length?`<details data-k="issDone"><summary class="small mut">已处理 / 已忽略（${doneI.length}）</summary>${doneI.map(issCard).join('')}</details>`:''}</details>`:'';
+  const last=(rt['记录']||[]).slice(-1)[0];
+  const testHtml=ts2?`<div class="small"><b>🧪 测试</b>　识别到 ${ts2['文件数']} 个测试文件${ts2['用例']?` · ${ts2['用例']} 个 case：`+Object.entries(ts2['统计']).map(([k,n])=>esc(k)+' '+n).join(' / '):''}${ts2['环境阻塞']?` · <b style="color:var(--warn)">${ts2['环境阻塞']} 个因手机 / 账号 / 环境没测成</b>`:''}
+    ${plan?`<div style="margin-top:4px">${plan['自动']?`⏰ 空闲手机够 <b>${plan['手机']}</b> 台时自动复测（现在空闲 ${freeN} 台，每分钟检查）　<a data-noauto>取消自动复测</a>`:`🔁 待复测${plan['原因']?'：'+esc(plan['原因']):''}　<span class="mut">条件具备后点「🔁 复测」，或设成手机够了自动复测</span>`}${plan['失败']?`<div style="color:var(--warn)">上次自动复测没能开始：${esc(plan['失败'])}</div>`:''}</div>`:''}
+    ${last?`<div class="mut" style="margin-top:4px">上次${esc(last['类型']==='复测'?'复测':'测试')}（${esc(last['时间'])}）：通过 ${last['通过']} / 失败 ${last['失败']} / 阻塞 ${last['阻塞']}${last['小结']?' · '+esc(last['小结'].slice(0,120)):''}</div>`:''}</div>`:'';
+  const devHtml=phones?`<div class="small" style="margin-bottom:4px"><b>📱 手机</b>　<span class="mut">${phones.length} 台，空闲 ${phones.filter(x=>x['空闲']).length} · 多个期共用，后台不碰别的期占着的手机</span></div>${phoneRows(phones,name)}`:'';
+  const qCard=q=>`<div class="q" data-q="${esc(q['编号'])}"><div class="small mut">🔔 ${esc(q['编号'])}${q['阶段']?' · '+esc(q['阶段']):''} · ${esc(q['时间'])}</div>
+    <div style="font-weight:600;margin-top:2px">${esc(q['问题'])}</div>
+    ${q['背景']?`<div class="ctx md">${md(q['背景']).html}</div>`:''}
+    ${q['文件'].length?`<div class="small">相关文件：${q['文件'].map(f=>fileLink(f)).join('　')}</div>`:''}
+    ${q['AI建议']?`<div class="small" style="margin-top:4px">AI 建议：<b>${esc(q['AI建议'])}</b></div>`:''}
+    <div class="opts">${q['选项'].map((o,i)=>`<button data-opt="${i}">${esc(o)}</button>`).join('')}${q['AI建议']?'<button data-ai="1">采用 AI 建议</button>':''}</div>
+    <textarea rows="2" placeholder="写下你的回答 / 修改意见（Cmd+Enter 提交）">${esc(drafts[q['编号']]||'')}</textarea>
+    <div class="row" style="margin-top:6px"><button class="pri" data-ans="1">提交回答</button><span class="mut small">回答后后台会话自动继续</span></div></div>`;
+  let prog='';
+  if(pg&&pg['类型']==='任务清单'){
+    const pct=pg['总数']?Math.round(100*pg['完成']/pg['总数']):0;
+    prog=`<h3 style="margin:14px 0 4px;font-size:14px">开发进度</h3>
+    ${pg['总数']?`<div class="pbar"><span style="width:${pct}%;background:var(--acc)"></span></div>
+      <div class="small">已完成 <b>${pg['完成']}/${pg['总数']}</b> 个任务${pg['当前']?' · 下一个：<b>'+esc(pg['当前'])+'</b>':' · 全部完成'}</div>`:'<div class="small mut">任务清单里还没有勾选框任务</div>'}
+    <div class="small mut" style="margin-top:4px">任务清单：${fileLink(pg['文件'])}</div>`;
+  }else if(pg){
+    const t=pg['任务'],ts=pg['测试'],c=ts['统计'],tot=Object.values(c).reduce((a,b)=>a+b,0);
+    const stepHtml=pg['步骤'].map(x=>{const [cls,lab]=STEP[x['状态']]||['run','进行中'];
+      const extra=x['名称']==='代码实现'&&t['总数']?` · ${t['状态']==='done'?t['总数']:Math.max(0,t['序号']-(x['状态']==='done'?0:1))}/${t['总数']} 个 TASK`:'';
+      return `<div class="pst ${cls}"><b>${x['名称']}</b><div class="small">${lab}${extra}${x['修订']&&x['修订']!=='0'?' · 修订 '+esc(x['修订'])+' 轮':''}</div>${x['文档']?`<div class="small">${fileLink(x['文档'])}</div>`:''}</div>`}).join('');
+    const pct=t['总数']?Math.round(100*(pg['步骤'][3]['状态']==='done'?t['总数']:Math.max(0,t['序号']-1))/t['总数']):0;
+    const COL={PASS:'var(--s3)',FAIL:'var(--warn)',BLOCKED:'var(--s1)',ERROR:'var(--s4)'};
+    prog=`<h3 style="margin:14px 0 4px;font-size:14px">开发进度</h3><div class="prog">${stepHtml}</div>
+    ${t['总数']?`<div class="pbar"><span style="width:${pct}%;background:var(--acc)"></span></div>
+      <div class="small">当前：<b>${esc(t['当前']||'—')}</b>${t['阶段']?' · 阶段 '+esc(t['阶段']):''}${t['审查轮次']&&t['审查轮次']!=='0'?' · 审查第 '+esc(t['审查轮次'])+' 轮':''}${t['设备修复轮次']&&t['设备修复轮次']!=='0'?' · 设备修复第 '+esc(t['设备修复轮次'])+' 轮':''}</div>`:''}
+    ${t['阻塞']?`<div class="small" style="color:var(--warn)">⛔ 阻塞：${esc(t['阻塞'])}</div>`:''}
+    ${t['待决策']?`<div class="small" style="color:var(--s1)">⚖ 待决策：${esc(t['待决策'])}</div>`:''}
+    <h3 style="margin:14px 0 4px;font-size:14px">测试进度</h3>
+    <div class="small">${ts['用例']?`设备用例 <b>${ts['用例']}</b> 个（${Object.entries(ts['优先级']).map(([k,n])=>esc(k)+' '+n).join(' · ')}）`:'还没有生成测试用例'}${ts['黑盒用例']?' · '+fileLink(ts['黑盒用例'],'黑盒用例'):''}</div>
+    ${tot?`<div class="pbar">${Object.entries(c).map(([k,n])=>`<span title="${k} ${n}" style="width:${100*n/tot}%;background:${COL[k]||'var(--mut)'}"></span>`).join('')}</div>
+      <div class="legend">${Object.entries(c).map(([k,n])=>`<span><b style="background:${COL[k]||'var(--mut)'}"></b>${k} ${n}</span>`).join('')}<span class="mut">通过率 ${Math.round(100*(c.PASS||0)/tot)}%</span></div>`:''}
+    ${t['设备发现']?(t['设备发现'].length>160?`<details class="small mut" style="margin-top:4px"><summary>设备验证：${esc(t['设备发现'].slice(0,120))}…</summary><div style="word-break:break-all">${esc(t['设备发现']).split(' | ').join('<br>')}</div></details>`:`<div class="small mut" style="margin-top:4px">设备验证：${esc(t['设备发现'])}</div>`):''}
+    ${t['审查发现']?`<details class="small"><summary>代码审查发现</summary>${esc(t['审查发现']).split(' | ').join('<br>')}</details>`:''}
+    ${ts['报告'].length||pg['审查报告'].length?`<div class="small" style="margin-top:4px">报告：${ts['报告'].map(f=>fileLink(f)).concat(pg['审查报告'].map(f=>fileLink(f))).join('　')}</div>`:''}
+    <div class="small mut" style="margin-top:4px">SDD 目录：${esc(pg['目录'])}${pg['状态文件']?' · '+fileLink(pg['状态文件']):''}</div>`;
+  }else prog=`<div class="small mut" style="margin-top:8px">开始开发后，这里显示开发进度（按开发流程「${esc(v['当前流程'])}」的进度设置）。</div>`;
+  const acts=v['动作'];
+  box.innerHTML=`<div class="top"><b>开发</b>${sess}<span class="sp"></span>
+ <label class="small mut" title="这一期用哪个 AI 开发；在「⚙ 设置」里管理">AI <select id="dvEng" ${run?'disabled':''}><option value="">默认（${esc(v['默认引擎'])}）</option>${v['引擎列表'].map(x=>`<option value="${esc(x.id)}" ${x.id===v['引擎']?'selected':''}>${esc(x['名称'])}</option>`).join('')}</select></label>
+    <label class="small mut" title="这一期按哪套流程开发；在「⚙ 设置」里管理流程">流程 <select id="dvFlow" ${run?'disabled':''}><option value="">自动（按仓库匹配，默认 ${esc(v['默认流程'])}）</option>${v['流程列表'].map(x=>`<option value="${esc(x.id)}" ${x.id===v['流程']?'selected':''}>${esc(x['名称'])}</option>`).join('')}</select></label>
+    <span class="sw ${v['免打扰']?'on':''}" id="dvDnd" title="开启后，后续需要确认的地方由 AI 自行决策并记录"><i></i>🌙 免打扰</span>${btn}</div>
+    ${v['免打扰']?'<div class="small mut" style="margin-top:4px">免打扰已开启：需要确认的地方由 AI 按自己的建议决策，结果记在下方「已处理的确认」和记录里。</div>':''}
+    <div class="two"><div class="stack">
+    ${pend.map(qCard).join('')}
+    ${prog}
+    ${acts.length||v['会话记录'].length?`<details data-k="acts" ${run?'open':''} style="margin-top:12px"><summary class="small"><b>最近动作</b>（${acts.length}）　<a data-allact>查看全部记录</a></summary><div class="act">${acts.slice().reverse().map(actLine).join('')}</div></details>`:''}
+    ${s?`<div class="chat">${(v['对话']||[]).slice(-4).map(x=>`<div class="msg">🧑 ${esc(x['时间'])} · ${esc(x['方式'])} · ${x['状态']==='待送达'?'<span style="color:var(--s1)">等 AI 下次调用知识库工具时送达</span>':'已送达'}　<b>${esc(x['内容'])}</b></div>`).join('')}
+      <textarea id="dvMsg" rows="2" placeholder="遇到问题直接跟 AI 说，如「MI 9 已经重新插好了，用它测 TASK-5」（Cmd+Enter 发送）">${esc(drafts.__chat||'')}</textarea>
+      <div class="row" style="margin-top:4px"><button class="pri" id="dvSend">发送</button>${run?'<label class="small row" style="color:var(--fg)"><input type="checkbox" id="dvInt"> 打断当前步骤，立即处理</label>':''}
+      <span class="mut small">${run?'不打断时：AI 下次调用知识库工具时收到（正在等你确认时立刻收到）；打断会中止正在跑的命令':'会接着上一次的会话（保留上下文）回答，答完就结束，不会自行接着开发'}。回复显示在「最近动作」里</span></div></div>`:''}
+    ${done.length?`<details data-k="done" style="margin-top:8px"><summary class="small"><b>已处理的确认</b>（${done.length}）</summary>${done.map(q=>`<div class="small" style="padding:6px 0;border-bottom:1px solid var(--soft)"><span class="mut">${esc(q['编号'])} · ${esc(q['回答时间']||q['时间'])} · ${esc(q['回答人']||q['状态'])}</span><br><b>${esc(q['问题'])}</b><br>→ ${esc(q['回答']||q['状态'])}</div>`).join('')}</details>`:''}
+    </div><div class="stack">
+    ${issHtml?`<div class="card2 issbox"><div class="bd">${issHtml}</div></div>`:''}
+    ${testHtml?`<div class="card2"><div class="bd">${testHtml}</div></div>`:''}
+    ${devHtml?`<div class="card2"><div class="bd">${devHtml}</div></div>`:''}
+    </div></div>`;
+  box.dataset.sig=sig;
+  box.querySelectorAll('details[data-k]').forEach(x=>{if(x.dataset.k in keep)x.open=keep[x.dataset.k]});
+  const na=box.querySelector('.act');if(na&&oTop>0)na.scrollTop=oTop+(na.scrollHeight-oH);   // 看旧记录时，新动作加在上面也不跳
+  devCache.name=name;devCache.html=box.innerHTML;devCache.sig=sig;
+  const aa=box.querySelector('[data-allact]');if(aa)aa.onclick=e=>{e.preventDefault();e.stopPropagation();allActs(name)};
+  box.querySelectorAll('[data-rf]').forEach(a=>a.onclick=()=>readFile(a.dataset.rf));
+  box.querySelectorAll('.q').forEach(el=>{const id=el.dataset.q,ta=el.querySelector('textarea'),q=pend.find(x=>x['编号']===id);
+    ta.oninput=()=>drafts[id]=ta.value;
+    el.querySelectorAll('[data-opt]').forEach(b=>b.onclick=()=>{ta.value=q['选项'][+b.dataset.opt];drafts[id]=ta.value;ta.focus()});
+    const ai=el.querySelector('[data-ai]');if(ai)ai.onclick=()=>{ta.value=q['AI建议'];drafts[id]=ta.value;ta.focus()};
+    const go=async()=>{try{const r=await post('/api/answer',{period:name,id,answer:ta.value});delete drafts[id];toast(r.msg);devBox(name)}catch(e){toast(e.message)}};
+    el.querySelector('[data-ans]').onclick=go;ta.onkeydown=e=>{if(e.key==='Enter'&&(e.metaKey||e.ctrlKey))go()}});
+  $('#dvDnd').onclick=async()=>{try{const r=await post('/api/dnd',{period:name,on:!v['免打扰']});toast(r.msg);devBox(name)}catch(e){toast(e.message)}};
+  const st=$('#dvStart');if(st)st.onclick=()=>{
+    openDlg((s?'继续':'开始')+'开发',`<div class="form"><p style="margin:0">这等同于<b>你本人批准开发</b>：会在目标仓库后台启动 Claude Code（${'auto'} 权限），按这一期的开发流程开发；需要确认的地方会出现在本页并弹系统通知。</p>
+      <label>输入期名确认<input type="text" id="dvC" placeholder="${esc(name)}"></label>
+      <label>备注（可空）<input type="text" id="dvN"></label>
+      <label class="row" style="color:var(--fg)"><input type="checkbox" id="dvD" ${v['免打扰']?'checked':''}> 开启免打扰（不再询问，AI 自行决策）</label>
+      <button class="pri" id="dvGo">▶ 确认开始</button></div>`);
+    $('#dvGo').onclick=async()=>{const b=$('#dvGo');b.disabled=true;b.textContent='启动中…';
+      try{if($('#dvD').checked!==v['免打扰'])await post('/api/dnd',{period:name,on:$('#dvD').checked});
+        await devStart({period:name,confirm:$('#dvC').value,note:$('#dvN').value})}
+      catch(e){toast(e.message);b.disabled=false;b.textContent='▶ 确认开始'}};$('#dvC').focus()};
+  const eg=$('#dvEng');if(eg)eg.onchange=async()=>{try{const r=await post('/api/period/engine',{period:name,id:eg.value});toast(r.msg);devBox(name)}catch(e){toast(e.message)}};
+  const fl=$('#dvFlow');if(fl)fl.onchange=async()=>{try{const r=await post('/api/period/flow',{period:name,id:fl.value});toast(r.msg);devBox(name)}catch(e){toast(e.message)}};
+  box.querySelectorAll('.iss').forEach(el=>el.querySelectorAll('[data-is]').forEach(b=>b.onclick=async()=>{
+    try{const r=await post('/api/issue',{period:name,id:el.dataset.i,status:b.dataset.is});toast(r.msg);devBox(name)}catch(e){toast(e.message)}}));
+  box.querySelectorAll('[data-dm]').forEach(b=>b.onclick=async()=>{
+    if(b.dataset.dm==='release'&&!confirm(`解除 ${b.dataset.sn} 的占用？`))return;
+    try{const r=await post('/api/device',{serial:b.dataset.sn,action:b.dataset.dm});toast(r.msg);devBox(name)}catch(e){toast(e.message)}});
+  const mt=$('#dvMsg');if(mt){mt.oninput=()=>drafts.__chat=mt.value;
+    const send=async()=>{const t=mt.value.trim();if(!t)return;const it=$('#dvInt'),b=$('#dvSend');b.disabled=true;
+      try{const r=await post('/api/dev/chat',{period:name,text:t,interrupt:!!(it&&it.checked)});delete drafts.__chat;mt.value='';toast(r.msg);devBox(name)}
+      catch(e){toast(e.message)}finally{b.disabled=false}};
+    $('#dvSend').onclick=send;mt.onkeydown=e=>{if(e.key==='Enter'&&(e.metaKey||e.ctrlKey))send()}}
+  const na2=box.querySelector('[data-noauto]');if(na2)na2.onclick=async()=>{try{const r=await post('/api/retest/plan',{period:name,auto:false});toast(r.msg);devBox(name)}catch(e){toast(e.message)}};
+  const rb=$('#dvRetest');if(rb)rb.onclick=()=>{
+    const need=Math.max(rt['需要手机']||1,(plan&&plan['手机'])||0);
+    openDlg('复测',`<div class="form"><p style="margin:0">后台启动 AI，按开发流程「${esc(v['当前流程'])}」的复测步骤补测：申请手机、编译装包、逐条验证，结果追加到测试报告。不改期状态、不开发新功能；发现缺陷会先问你。</p>
+      ${ts2['环境阻塞']?`<p class="small" style="margin:0">上次有 <b>${ts2['环境阻塞']}</b> 个 case 因手机 / 账号 / 环境没测成${openI.length?`，还有 ${openI.length} 个问题待处理（见「⚠ 需要你处理的问题」）`:''}。</p>`:''}
+      <label class="row" style="color:var(--fg)"><input type="radio" name="rtS" value="未通过" checked> 只测上次没通过的（BLOCKED / FAIL / 未验证）</label>
+      <label class="row" style="color:var(--fg)"><input type="radio" name="rtS" value="全部"> 全部重新测</label>
+      <label>需要几台手机<span class="row"><input type="number" id="rtN" min="1" max="10" value="${need}" style="width:80px"><span class="mut small">现在空闲 ${freeN} 台${phones?'':'（本机找不到 adb）'}</span></span></label>
+      <label>备注（可空，如「已接好 3 台手机，账号已重新登录」）<input type="text" id="rtNote"></label>
+      <div class="row"><button class="pri" id="rtGo">▶ 现在复测</button><button id="rtAuto">⏰ 手机够了自动复测</button></div>
+      <p class="small mut" style="margin:0">「手机够了自动复测」：每分钟检查一次，空闲手机达到台数就自动开始并弹通知（只触发一次）。</p></div>`);
+    const opt=()=>({scope:($('#dlgB').querySelector('input[name=rtS]:checked')||{}).value||'未通过',phones:+$('#rtN').value||1});
+    $('#rtGo').onclick=async()=>{const o=opt();if(phones&&freeN<o.phones&&!confirm(`现在只有 ${freeN} 台空闲手机，少于 ${o.phones} 台。仍然现在复测？（测不了的会记成问题）`))return;
+      const b=$('#rtGo');b.disabled=true;b.textContent='启动中…';
+      try{const r=await post('/api/retest',{period:name,scope:o.scope,note:$('#rtNote').value});dlg.close();toast(r.msg);render()}catch(e){toast(e.message);b.disabled=false;b.textContent='▶ 现在复测'}};
+    $('#rtAuto').onclick=async()=>{const o=opt();try{const r=await post('/api/retest/plan',{period:name,auto:true,phones:o.phones,scope:o.scope});dlg.close();toast(r.msg);devBox(name)}catch(e){toast(e.message)}};
+  };
+  const sp=$('#dvStop');if(sp)sp.onclick=async()=>{if(!confirm(s['类型']==='复测'?'停止复测？':'停止后台开发？进行中的步骤会中断，状态改为「已暂停」，之后可「继续开发」。'))return;
+    try{const r=await post('/api/dev/stop',{period:name});toast(r.msg);render()}catch(e){toast(e.message)}};
+}
+
+// 开始开发：仓库、分支自动判断；判断不了时弹窗让本人选，选完带着选择重新开始
+async function devStart(body){
+  try{const r=await post('/api/dev/start',body);dlg.close();toast(r.msg);render()}
+  catch(e){if(!e.need)throw e;needDlg(body,e.need)}
+}
+function needDlg(body,n){
+  const radio=(v,label,dis,chk)=>`<label class="row" style="align-items:flex-start;margin:4px 0;${dis?'opacity:.55':''}"><input type="radio" name="nd" value="${esc(v)}" ${dis?'disabled':''} ${chk?'checked':''}><span>${label}</span></label>`;
+  let h;
+  if(n['需要']==='仓库'){
+    const cs=n['候选']||[],first=cs.findIndex(x=>x['可用']);
+    h=`<p>${esc(n['说明']||(cs.length?'找到多个可能的代码仓库，确定不了用哪个，请选一个：':'本期文字资料里没有找到本机代码路径，请填写：'))}</p>
+      ${cs.map((x,i)=>radio(x['路径'],`<code>${esc(x['路径'])}</code>　<span class="mut small">当前分支 ${esc(x['当前分支']||'—')} · 来自 ${esc(x['依据'].join('、'))} · ${x['可用']?'流程 '+esc(x['流程']):'没有匹配的开发流程（可在开发面板换流程）'}</span>`,!x['可用'],i===first)).join('')}
+      ${radio('*','其他路径　<input type="text" id="ndP" style="width:420px" placeholder="/Users/…/代码仓库根目录">',false,first<0)}
+      ${n['分支']&&n['分支'].length?`<p class="mut small">本期登记的开发分支：${esc(n['分支'].join('、'))}</p>`:''}
+      <p class="mut small">选定后会记在这一期，下次开始开发直接使用。</p>`;
+  }else{
+    const dirty=n['未提交数']||0;
+    h=`<p>仓库 <code>${esc(n['仓库'])}</code> 当前在分支 <b>${esc(n['当前分支']||'（游离）')}</b>，本期登记的开发分支是 <b>${esc(n['分支'].join('、'))}</b>。SDD 文档目录按分支名生成，请确认：</p>
+      ${n['分支'].map((b,i)=>radio('sw:'+b,`切换到 <b>${esc(b)}</b>　<span class="mut small">切换前在当前分支、切换后在新分支各执行一次 <code>git pull --rebase</code>；本地没有会从 origin 拉取，两边都没有会提示你先建好</span>`,dirty>0,i===0&&!dirty)).join('')}
+      ${radio('sw:*','切换到其他分支　<input type="text" id="ndB" style="width:340px" placeholder="分支名">',dirty>0,false)}
+      ${radio('keep','就用当前分支 <b>'+esc(n['当前分支'])+'</b> 开发　<span class="mut small">先执行一次 <code>git pull --rebase</code></span>',!!dirty,false)}
+      ${dirty?`<div class="notice small" style="display:block">已跟踪的文件有 ${dirty} 处未提交的改动，<code>git pull --rebase</code> 拉不了代码，也不能切分支。请先在仓库里提交或 stash，再回来点「开始开发」：<pre style="margin:6px 0 0">${esc(n['未提交'].join('\n'))}</pre></div>`:''}`;
+  }
+  openDlg(n['需要']==='仓库'?'选择开发仓库':'确认开发分支',`<div>${h}<div class="row" style="margin-top:10px"><button class="pri" id="ndGo">继续开始开发</button><button onclick="dlg.close()">取消</button></div></div>`);
+  $('#dlgB').querySelectorAll('input[type=text]').forEach(t=>t.onfocus=()=>{t.closest('label').querySelector('input[type=radio]').checked=true});
+  $('#ndGo').onclick=async()=>{
+    const v=($('#dlgB').querySelector('input[name=nd]:checked')||{}).value;if(!v)return toast('请选一项');
+    const b={...body};
+    if(n['需要']==='仓库'){b.repo=v==='*'?$('#ndP').value.trim():v;if(!b.repo)return toast('请填写代码路径')}
+    else{b.repo=n['仓库'];if(v==='keep')b.keepBranch=true;else{b.branch=v==='sw:*'?$('#ndB').value.trim():v.slice(3);if(!b.branch)return toast('请填写分支名')}}
+    const g=$('#ndGo');g.disabled=true;g.textContent='处理中…';
+    try{await devStart(b)}catch(e){toast(e.message);g.disabled=false;g.textContent='继续开始开发'}};
+}
+
+// ---------------- 设置：开发流程（其他研发组可改成自己的流程）
+async function settingsPage(){
+  const d=await api('/api/settings');
+  const card=f=>`<div class="bcard"><div class="row" style="justify-content:space-between"><b>${esc(f['名称'])}</b>
+      <span>${f['默认']?'<span class="badge st-开发中">默认</span> ':''}<span class="chip">${f['内置']?'内置'+(f['已修改']?' · 已修改':''):'自定义'}</span></span></div>
+    <div class="small mut" style="margin:4px 0">${esc(f['说明']||'')}</div>
+    <div class="small">识别文件：${f['识别文件'].length?f['识别文件'].map(x=>'<code>'+esc(x)+'</code>').join(' '):'不限（任何 git 仓库）'}</div>
+    <div class="small">文档目录：${f['文档目录方式']==='命令'?'运行 <code>'+esc(f['文档目录命令'])+'</code>':'<code>'+esc(f['文档目录模板'])+'</code>'} · 准备方式 ${esc(f['准备方式'])} · 进度 ${esc(f['进度类型'])}</div>
+    <div class="row" style="margin-top:8px"><button data-ed="${esc(f.id)}">编辑</button><button data-cp="${esc(f.id)}">复制为新流程</button>
+      ${f['默认']?'':`<button data-df="${esc(f.id)}">设为默认</button>`}<button data-ex="${esc(f.id)}">导出</button>
+      ${f['内置']?(f['已修改']?`<button data-rm="${esc(f.id)}">恢复默认</button>`:''):`<button class="danger" data-rm="${esc(f.id)}">删除</button>`}</div></div>`;
+  const st=e=>e['状态'],ecard=e=>`<div class="bcard"><div class="row" style="justify-content:space-between"><b>${esc(e['名称'])}</b>
+      <span>${e['默认']?'<span class="badge st-开发中">默认</span> ':''}<span class="chip">${e['内置']?'内置'+(e['已修改']?' · 已修改':''):'自定义'}</span></span></div>
+    <div class="small mut" style="margin:4px 0">${esc(e['说明']||'')}</div>
+    <div class="small">${st(e)['已安装']?'✅ 已安装 '+esc(st(e)['版本']):'⚪ 未安装（找不到命令 <code>'+esc(e['命令'])+'</code>）'}
+      · ${st(e)['已接入']===true?'✅ 已接入知识库':st(e)['已接入']===false?'⚠ 未接入知识库':'知识库接入情况未知'}</div>
+    <div class="row" style="margin-top:8px"><button data-eed="${esc(e.id)}">编辑</button><button data-ecp="${esc(e.id)}">复制为新引擎</button>
+      ${e['默认']?'':`<button data-edf="${esc(e.id)}">设为默认</button>`}
+      ${st(e)['已安装']&&st(e)['已接入']!==true?(e['接入命令']?`<button class="pri" data-eln="${esc(e.id)}">接入知识库</button>`:e['接入说明']?`<button data-ehp="${esc(e.id)}">怎么接入</button>`:''):''}
+      ${st(e)['已安装']?`<button data-ets="${esc(e.id)}" title="让它调用一次 kb_overview，验证能运行、能用知识库工具（约半分钟）">测试</button>`:''}
+      ${e['内置']?(e['已修改']?`<button data-erm="${esc(e.id)}">恢复默认</button>`:''):`<button class="danger" data-erm="${esc(e.id)}">删除</button>`}</div></div>`;
+  app.innerHTML=`<h1>⚙ 设置</h1>
+    <div class="row" style="justify-content:space-between"><h2>AI 引擎</h2><button id="enNew">＋ 新建引擎</button></div>
+    <p class="mut">后台干活用哪个编程 AI：开始开发、模糊添加、来源更新、生成流程。开发面板可以给每一期单独选，其余用默认引擎。
+    引擎要<b>能无人值守运行</b>并<b>接入知识库</b>（用 kb_ask 等工具在网页上找你确认）。权限相关的启动参数决定 AI 能在仓库里做什么，内置预设只用常规权限模式，请按团队安全要求调整。</p>
+    <div class="bgrid">${d.engines.map(ecard).join('')}</div>
+    <div class="row" style="justify-content:space-between;margin-top:18px"><h2>开发流程</h2><div class="row"><button id="flImp">导入</button><button id="flNew">＋ 新建空白流程</button><button class="pri" id="flCmd">＋ 从命令 / 技能添加</button></div></div>
+    <p class="mut">点「开始开发」后，后台 AI 按开发流程干活：怎么认代码仓库、文档目录放哪、按什么步骤推进、什么时候要你确认、进度怎么看。
+    默认是「通用模板」；已有自己的流程命令（如 <code>/my-flow</code>）的，点<b>「从命令 / 技能添加」</b>选中它即可自动生成，不用写脚本；
+    也可以复制「通用模板」手动改，用「导出 / 导入」在同事之间共享。
+    每一期可以在开发面板单独选流程，不选就按仓库里的识别文件自动匹配，匹配不上用默认流程。详见 <a href="#/d/开发流程设置">开发流程设置</a>。</p>
+    <div class="bgrid">${d.flows.map(card).join('')}</div>`;
+  const byId=id=>d.flows.find(f=>f.id===id),eById=id=>d.engines.find(e=>e.id===id);
+  const strip=o=>{['id','内置','已修改','默认','状态','接入说明'].forEach(k=>delete o[k]);return o};
+  app.querySelectorAll('[data-eed]').forEach(b=>b.onclick=()=>engineDlg(d,eById(b.dataset.eed)));
+  app.querySelectorAll('[data-ecp]').forEach(b=>b.onclick=()=>{const e=strip({...eById(b.dataset.ecp)});e['名称']+='（副本）';engineDlg(d,e)});
+  $('#enNew').onclick=()=>{const e=strip({...eById('claude')});e['名称']='';e['说明']='';e['命令']='';e['接入命令']='';engineDlg(d,e)};
+  app.querySelectorAll('[data-edf]').forEach(b=>b.onclick=async()=>{try{toast((await post('/api/engine/default',{id:b.dataset.edf})).msg);render()}catch(e){toast(e.message)}});
+  app.querySelectorAll('[data-eln]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{toast((await post('/api/engine/link',{id:b.dataset.eln})).msg);render()}catch(e){toast(e.message);b.disabled=false}});
+  app.querySelectorAll('[data-ehp]').forEach(b=>b.onclick=()=>{const e=eById(b.dataset.ehp);openDlg(`把知识库接入 ${e['名称']}`,`<pre style="white-space:pre-wrap">${esc(e['接入说明'])}</pre><button id="ehC">复制</button>`);$('#ehC').onclick=()=>{navigator.clipboard.writeText(e['接入说明']);toast('已复制')}});
+  app.querySelectorAll('[data-ets]').forEach(b=>b.onclick=async()=>{const e=eById(b.dataset.ets);b.disabled=true;b.textContent='测试中…';
+    try{const r=await post('/api/engine/test',{id:e.id});openDlg(`测试 ${e['名称']}：${r['成功']?'✅ 成功':'❌ 没通过'}`,`<p class="small mut">退出码 ${r['退出码']} · 用时 ${r['耗时']} 秒</p><pre style="white-space:pre-wrap">${esc(r['结果']||'（没有输出）')}</pre>${r['成功']?'':'<p class="small">没通过时：确认已安装、已登录，「接入知识库」后再试；仍不行就检查启动参数（权限模式是否允许调用知识库工具）。</p>'}`)}
+    catch(e){toast(e.message)}b.disabled=false;b.textContent='测试'});
+  app.querySelectorAll('[data-erm]').forEach(b=>b.onclick=async()=>{const e=eById(b.dataset.erm);
+    if(!confirm(e['内置']?`把「${e['名称']}」恢复为默认设置？`:`删除引擎「${e['名称']}」？用它的期会改回默认引擎。`))return;
+    try{toast((await post('/api/engine/delete',{id:e.id})).msg);render()}catch(x){toast(x.message)}});
+  app.querySelectorAll('[data-ed]').forEach(b=>b.onclick=()=>flowDlg(d,byId(b.dataset.ed)));
+  app.querySelectorAll('[data-cp]').forEach(b=>b.onclick=()=>{const f={...byId(b.dataset.cp)};['id','内置','已修改','默认'].forEach(k=>delete f[k]);f['名称']+='（副本）';flowDlg(d,f)});
+  app.querySelectorAll('[data-df]').forEach(b=>b.onclick=async()=>{try{toast((await post('/api/settings/default',{id:b.dataset.df})).msg);render()}catch(e){toast(e.message)}});
+  app.querySelectorAll('[data-rm]').forEach(b=>b.onclick=async()=>{const f=byId(b.dataset.rm);
+    if(!confirm(f['内置']?`把「${f['名称']}」恢复为内置的默认设置？你的修改会丢失。`:`删除流程「${f['名称']}」？用它的期会改回「自动」。`))return;
+    try{toast((await post('/api/settings/flow/delete',{id:f.id})).msg);render()}catch(e){toast(e.message)}});
+  app.querySelectorAll('[data-ex]').forEach(b=>b.onclick=()=>{const f={...byId(b.dataset.ex)};['id','内置','已修改','默认'].forEach(k=>delete f[k]);
+    const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(f,null,2)],{type:'application/json'}));a.download=`开发流程-${f['名称']}.json`;a.click()});
+  $('#flNew').onclick=()=>{const f={...d.flows.find(x=>x.id==='generic')};['id','内置','已修改','默认'].forEach(k=>delete f[k]);f['名称']='';f['说明']='';flowDlg(d,f)};
+  $('#flCmd').onclick=()=>cmdDlg(d);
+  $('#flImp').onclick=()=>{openDlg('导入开发流程',`<div style="display:grid;gap:8px"><input type="file" id="fiF" accept=".json,application/json"><textarea id="fiT" rows="10" placeholder="或粘贴导出的 JSON"></textarea><button class="pri" id="fiGo">导入为新流程</button></div>`);
+    $('#fiF').onchange=async e=>{const x=e.target.files[0];if(x)$('#fiT').value=await x.text()};
+    $('#fiGo').onclick=async()=>{let f;try{f=JSON.parse($('#fiT').value)}catch(_){return toast('不是有效的 JSON')}
+      delete f.id;try{const r=await post('/api/settings/flow',{flow:f});dlg.close();toast(r.msg);render()}catch(e){toast(e.message)}}};
+}
+function engineDlg(d,e){
+  const fld=([k,lab,typ,help])=>{const v=e[k]??'';let inp;
+    if(typ==='textarea')inp=`<textarea data-k="${k}" rows="3">${esc(v)}</textarea>`;
+    else if(typ==='lines')inp=`<textarea data-k="${k}" rows="6" style="font-family:monospace">${esc((v||[]).join('\n'))}</textarea>`;
+    else if(typ.startsWith('select:'))inp=`<select data-k="${k}">${typ.slice(7).split('|').map(o=>`<option ${o===v?'selected':''}>${esc(o)}</option>`).join('')}</select>`;
+    else inp=`<input type="text" data-k="${k}" value="${esc(v)}" style="width:100%">`;
+    return `<label style="display:block"><b class="small">${esc(lab)}</b>${inp}<div class="small mut">${esc(help)}</div></label>`};
+  openDlg(e.id?`编辑 AI 引擎：${e['名称']}`:'新建 AI 引擎',`<div style="display:grid;gap:10px">
+    ${e['内置']?'<div class="notice small" style="display:block">这是内置引擎：保存后存为你的修改，随时可在设置页「恢复默认」。</div>':''}
+    ${d.engineFields.map(fld).join('')}
+    <div class="small mut">参数里可用变量：${Object.entries(d.engineVars).map(([k,v])=>`<code>{${esc(k)}}</code> ${esc(v)}`).join('；')}。参数逐个传给命令，不经过 shell。</div>
+    <div class="row"><button class="pri" id="enGo">保存</button></div></div>`);
+  $('#enGo').onclick=async()=>{const o={id:e.id||''};$('#dlgB').querySelectorAll('[data-k]').forEach(x=>o[x.dataset.k]=x.value);
+    try{const r=await post('/api/engine',{engine:o});dlg.close();toast(r.msg);render()}catch(x){toast(x.message)}};
+}
+async function cmdDlg(d){
+  openDlg('从命令 / 技能添加开发流程','<span class="mut small">正在查找本机的技能和命令…</span>');
+  let cs;try{cs=(await api('/api/settings/commands')).items}catch(e){return $('#dlgB').textContent=e.message}
+  const row=(c,i)=>`<label class="row cmdrow" data-t="${esc((c['名称']+' '+c['说明']+' '+c['类型']).toLowerCase())}" style="align-items:flex-start;margin:2px 0"><input type="radio" name="cm" value="${i}">
+    <span><b>${esc(c['名称'])}</b> <span class="chip">${esc(c['类型'])}</span><br><span class="small mut">${esc(c['说明']||'')}</span></span></label>`;
+  $('#dlgB').innerHTML=`<div style="display:grid;gap:8px">
+    <p class="small mut" style="margin:0">选中你平时用来开发的命令或技能（如 <code>/my-flow</code>），自动生成一套开发流程，生成后可以再改。
+    个人技能 / 命令任何仓库都能用；仓库里的命令只匹配带这个命令的仓库。</p>
+    <input type="text" id="cmQ" placeholder="搜索，如 plan、sdd">
+    <div id="cmL" style="max-height:46vh;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:6px 10px">${cs.map(row).join('')||'<span class="mut">没有找到技能或命令</span>'}</div>
+    <div class="row"><button class="pri" id="cmAI" title="Claude 读说明文件，按它的实际做法填好文档目录、步骤、确认点、进度（约 1 分钟）">让 Claude 读说明生成（推荐）</button>
+      <button id="cmQk" title="按固定模板填写，不调用 AI">快速生成</button><span class="mut small" id="cmS"></span></div></div>`;
+  $('#cmQ').oninput=()=>{const q=$('#cmQ').value.trim().toLowerCase();$('#cmL').querySelectorAll('.cmdrow').forEach(x=>x.style.display=!q||x.dataset.t.includes(q)?'':'none')};
+  $('#cmQ').focus();
+  const go=async ai=>{const v=($('#cmL').querySelector('input[name=cm]:checked')||{}).value;if(v===undefined)return toast('先选一个命令或技能');
+    const bs=[$('#cmAI'),$('#cmQk')];bs.forEach(b=>b.disabled=true);$('#cmS').textContent=ai?'Claude 正在读说明并生成，约 1 分钟…':'生成中…';
+    try{const r=await post('/api/settings/flow/draft',{path:cs[v]['路径'],ai});flowDlg(d,r.flow)}
+    catch(e){toast(e.message);bs.forEach(b=>b.disabled=false);$('#cmS').textContent=''}};
+  $('#cmAI').onclick=()=>go(true);$('#cmQk').onclick=()=>go(false);
+}
+function flowDlg(d,f){
+  const fld=([k,lab,typ,help])=>{const v=f[k]??'';let inp;
+    if(typ==='textarea')inp=`<textarea data-k="${k}" rows="${k==='开发步骤'?8:3}">${esc(v)}</textarea>`;
+    else if(typ==='lines')inp=`<textarea data-k="${k}" rows="2">${esc((v||[]).join('\n'))}</textarea>`;
+    else if(typ.startsWith('select:'))inp=`<select data-k="${k}">${typ.slice(7).split('|').map(o=>`<option ${o===v?'selected':''}>${esc(o)}</option>`).join('')}</select>`;
+    else inp=`<input type="text" data-k="${k}" value="${esc(v)}" style="width:100%">`;
+    return `<label style="display:block"><b class="small">${esc(lab)}</b>${inp}<div class="small mut">${esc(help)}</div></label>`};
+  openDlg(f.id?`编辑开发流程：${f['名称']}`:'新建开发流程',`<div style="display:grid;gap:10px">
+    ${f['内置']?'<div class="notice small" style="display:block">这是内置流程：保存后存为你的修改，随时可在设置页「恢复默认」。</div>':''}
+    ${d.fields.map(fld).join('')}
+    <div class="small mut">开发步骤、确认点、续跑提示、开发约定、需求变更提示里可用变量：${Object.entries(d.vars).map(([k,v])=>`<code>{${esc(k)}}</code> ${esc(v)}`).join('；')}</div>
+    <div class="row"><button class="pri" id="flGo">保存</button><span class="mut small">⌘ + 回车 保存</span></div></div>`);
+  const go=async()=>{const o={id:f.id||''};$('#dlgB').querySelectorAll('[data-k]').forEach(x=>o[x.dataset.k]=x.value);
+    try{const r=await post('/api/settings/flow',{flow:o});dlg.close();toast(r.msg);render()}catch(e){toast(e.message)}};
+  $('#flGo').onclick=go;$('#dlgB').onkeydown=e=>{if(e.key==='Enter'&&(e.metaKey||e.ctrlKey))go()};
+}
+
+// ---------------- 基础知识库：所有期共用的账号、测试账号、代理 / VPN、环境配置
+async function basePage(){
+  const d=await api('/api/base'),es=d['条目'];
+  const field=(e,f)=>`<tr><td>${esc(f['名'])}</td><td>${f['机密']?`<span class="sec" data-sv="${esc(e['编号'])}" data-sf="${esc(f['名'])}">●●●●●●</span> <a class="small" data-show>显示</a> · <a class="small" data-copy>复制</a>`:`${/^https?:\/\//.test(f['值'])?`<a href="${esc(f['值'])}" target="_blank" rel="noopener">${esc(f['值'])}</a>`:esc(f['值'])} <a class="small" data-cp="${esc(f['值'])}">复制</a>`}</td></tr>`;
+  const card=e=>`<div class="bcard"><div class="t"><b>${esc(e['名称'])}</b><span class="small"><span class="mut">${esc(e['编号'])}</span> <a data-edit="${esc(e['编号'])}">编辑</a></span></div>
+    ${e['适用']?`<div class="small mut">适用：${esc(e['适用'])}</div>`:''}
+    <table>${(e['字段']||[]).map(f=>field(e,f)).join('')}</table>
+    ${e['附件']&&e['附件'].length?`<div class="small">附件：${e['附件'].map(a=>`<a data-rf="${esc(d.dir+'/'+a)}">${esc(a.split('/').pop())}</a>`).join('　')}</div>`:''}
+    ${e['备注']?`<div class="small md" style="margin-top:4px">${md(e['备注']).html}</div>`:''}</div>`;
+  app.innerHTML=`<div class="row" style="justify-content:space-between"><h1>🗂 基础知识库</h1><button class="pri" id="bAdd">＋ 新增</button></div>
+    <p class="mut">所有期共用的基础上下文：网站账号、测试账号、Wi-Fi / 代理 / VPN、环境配置等。Claude 回答和开发时会自动参考。
+    密码等<b>机密字段只存 macOS 钥匙串</b>，页面默认隐藏；也可以直接跟 Claude 说「把 XX 测试账号记到基础知识库」。</p>
+    ${es.length?d.cats.filter(c=>es.some(e=>e['分类']===c)).map(c=>`<h2>${esc(c)}</h2><div class="bgrid">${es.filter(e=>e['分类']===c).map(card).join('')}</div>`).join('')
+      :'<p class="mut">还没有内容，点右上角「＋ 新增」。</p>'}
+    ${d.files.length?`<h2>文件</h2><ul class="files">${d.files.map(f=>`<li><a data-rf="${esc(f.path)}">${esc(f.path.slice(d.dir.length+1))}</a><span class="mut small">${size(f.size)} · ${when(f.mtime)}</span></li>`).join('')}</ul>`:''}
+    <p class="mut small">目录：${esc(d.dir)}</p>`;
+  app.querySelectorAll('[data-rf]').forEach(a=>a.onclick=()=>readFile(a.dataset.rf));
+  app.querySelectorAll('[data-cp]').forEach(a=>a.onclick=()=>{navigator.clipboard.writeText(a.dataset.cp);toast('已复制')});
+  const secret=async el=>(await post('/api/base/secret',{id:el.dataset.sv,field:el.dataset.sf})).value;
+  app.querySelectorAll('[data-show]').forEach(a=>a.onclick=async()=>{const el=a.previousElementSibling;
+    if(el.dataset.shown){el.textContent='●●●●●●';delete el.dataset.shown;a.textContent='显示';return}
+    try{el.textContent=await secret(el);el.dataset.shown=1;a.textContent='隐藏'}catch(e){toast(e.message)}});
+  app.querySelectorAll('[data-copy]').forEach(a=>a.onclick=async()=>{try{await navigator.clipboard.writeText(await secret(a.parentElement.querySelector('[data-sv]')));toast('已复制')}catch(e){toast(e.message)}});
+  const edit=e=>{
+    const fs=e?e['字段']:[{'名':'账号','值':'','机密':false},{'名':'密码','值':'','机密':true}];
+    const row=f=>`<div class="frow"><input type="text" class="fN" placeholder="字段名，如 账号 / 密码 / 代理地址" value="${esc(f['名'])}">
+      <input type="${f['机密']?'password':'text'}" class="fV" placeholder="${f['机密']&&e?'留空 = 不修改':'值'}" value="${esc(f['机密']?'':f['值'])}">
+      <label class="small row"><input type="checkbox" class="fS" ${f['机密']?'checked':''}>机密</label><a class="small" data-del>删除</a></div>`;
+    openDlg(e?'编辑 '+e['编号']:'新增基础信息',`<div class="form">
+      <label>分类<select id="bC">${d.cats.map(c=>`<option ${e&&e['分类']===c?'selected':''}>${c}</option>`).join('')}</select></label>
+      <label>名称<input type="text" id="bN" value="${esc(e?e['名称']:'')}" placeholder="如：测试账号（国内）/ 办公室 Wi-Fi / 抓包代理"></label>
+      <label>适用（产品 / 场景，可空）<input type="text" id="bS" value="${esc(e?e['适用']:'')}"></label>
+      <div><div class="small mut" style="margin-bottom:4px">字段（勾选「机密」的只存钥匙串）</div><div id="bF" style="display:grid;gap:6px">${fs.map(row).join('')}</div>
+        <a class="small" id="bFA" style="display:inline-block;margin-top:6px">＋ 添加字段</a></div>
+      <label>备注（可空，支持 Markdown）<textarea id="bR" rows="3">${esc(e?e['备注']:'')}</textarea></label>
+      <div class="row"><button class="pri" id="bGo">保存</button>${e?'<button class="danger" id="bDel">删除这条</button>':''}</div></div>`);
+    const bind=()=>{$('#bF').querySelectorAll('[data-del]').forEach(a=>a.onclick=()=>a.parentElement.remove());
+      $('#bF').querySelectorAll('.fS').forEach(c=>c.onchange=()=>c.closest('.frow').querySelector('.fV').type=c.checked?'password':'text')};
+    bind();$('#bFA').onclick=()=>{$('#bF').insertAdjacentHTML('beforeend',row({'名':'','值':'','机密':false}));bind()};
+    $('#bGo').onclick=async()=>{const fields=[...$('#bF').querySelectorAll('.frow')].map(r=>({'名':r.querySelector('.fN').value.trim(),'值':r.querySelector('.fV').value,'机密':r.querySelector('.fS').checked})).filter(f=>f['名']);
+      try{const r=await post('/api/base/save',{id:e?e['编号']:'',category:$('#bC').value,name:$('#bN').value,scope:$('#bS').value,note:$('#bR').value,fields});dlg.close();toast(r.msg.split('\n')[0]);render()}catch(x){toast(x.message)}};
+    if(e)$('#bDel').onclick=async()=>{if(!confirm('删除「'+e['名称']+'」？机密字段也会从钥匙串删除。'))return;
+      try{const r=await post('/api/base/save',{id:e['编号'],delete:true});dlg.close();toast(r.msg);render()}catch(x){toast(x.message)}};
+    $('#bN').focus()};
+  $('#bAdd').onclick=()=>edit(null);
+  app.querySelectorAll('[data-edit]').forEach(a=>a.onclick=()=>edit(es.find(x=>x['编号']===a.dataset.edit)));
+}
+
+async function render(){
+  const h=decodeURIComponent(location.hash.slice(1)||'/');
+  try{
+    if(h.startsWith('/p/'))await period(h.slice(3));
+    else if(h.startsWith('/d/'))await docs(h.slice(3));
+    else if(h==='/base')await basePage();
+    else if(h==='/settings')await settingsPage();
+    else if(h==='/phones')await phonesPage();
+    else if(h.startsWith('/s/')){const [q,s]=h.slice(3).split('\u0001');await search(q,s)}
+    else await overview();
+  }catch(e){app.innerHTML=`<p>出错：${esc(e.message)}</p><p><a href="#/">返回首页</a></p>`}
+  sideNav();
+}
+$('#sf').onsubmit=e=>{e.preventDefault();const q=$('#q').value.trim();if(q)location.hash='#/s/'+enc(q+'\u0001'+$('#scope').value)};
+$('#addBtn').onclick=()=>addDlg();
+window.onhashchange=render;render();navRefresh();
+// 实时更新：服务端有变化才推送（SSE），只刷新对应部分；不再定时轮询
+let pagePending=false;
+const curPeriod=()=>{const h=decodeURIComponent(location.hash.slice(1)||'/');return h.startsWith('/p/')?h.slice(3):null};
+const canRender=()=>!Object.values(drafts).some(x=>x)&&!dlg.open&&!document.activeElement.matches('input,textarea,select');
+function softRender(){if(!canRender()){pagePending=true;return}pagePending=false;const y=scrollY;render().then(()=>scrollTo(0,y))}
+function onEvt(ev){
+  const h=decodeURIComponent(location.hash.slice(1)||'/'), p=curPeriod();
+  if(ev.kind==='dev'&&p===ev.period)devBox(p);
+  else if(ev.kind==='page'&&p===ev.period)softRender();
+  else if(ev.kind==='overview'&&h==='/')softRender();
+  if(ev.kind==='overview'&&h!=='/')navRefresh();
+  else if(ev.kind==='adds'){if(dlg.open&&$('#adList'))addList();else if(h==='/')softRender()}
+}
+function connectEvents(){
+  const es=new EventSource('/api/events'),dot=$('#live');
+  es.onopen=()=>{dot.className='live on';dot.title='实时连接中：有变化会自动更新'};
+  es.onmessage=e=>{try{onEvt(JSON.parse(e.data))}catch(_){}};
+  es.onerror=()=>{dot.className='live';dot.title='实时连接断开，正在重连…'};   // EventSource 会自动重连
+}
+connectEvents();
+// 刚才因为在输入 / 弹窗开着而推迟的刷新，空下来再补上
+document.addEventListener('focusout',()=>setTimeout(()=>{if(pagePending)softRender();else if(devPending&&curPeriod()===devPending){const n=devPending;devPending='';devBox(n)}},300));
+dlg.addEventListener('close',()=>{if(pagePending)setTimeout(softRender,100)});
+setInterval(()=>document.querySelectorAll('[data-since]').forEach(x=>x.textContent=since(x.dataset.since)),30000);   // 只更新「已运行」文字，不请求服务器
+</script>
+</body>
+</html>
