@@ -828,6 +828,30 @@ function needDlg(body,n){
 }
 
 // ---------------- 设置：开发流程（其他研发组可改成自己的流程）
+function plDlg(d,p,mount){
+  const ev=Object.keys(d.pluginEvents), on=new Set(p['时机']);
+  const field=c=>{const v=p['配置'][c['键']]||'', id='plc_'+c['键'];
+    const inp=(c['类型']||'').startsWith('select:')?`<select data-pc="${esc(c['键'])}">${c['类型'].slice(7).split('|').map(o=>`<option ${o===v?'selected':''}>${esc(o)}</option>`).join('')}</select>`
+      :`<input type="text" data-pc="${esc(c['键'])}" value="${esc(v)}">`;
+    return `<label>${esc(c['标题'])}${inp}${c['说明']?`<span class="small mut">${esc(c['说明'])}</span>`:''}</label>`};
+  openDlg(`${mount?'挂载':'设置'}插件 · ${p['名称']}`,`<div class="form"><div class="small mut">${esc(p['说明']||'')}</div>
+    <div><b class="small">在什么时候运行</b>${ev.map(e=>`<label class="small" style="display:block;margin-top:4px"><input type="checkbox" data-pe="${esc(e)}" ${on.has(e)?'checked':''}> <b>${esc(e)}</b>　<span class="mut">${esc(d.pluginEvents[e])}</span></label>`).join('')}</div>
+    ${(p['配置项']||[]).map(field).join('')}
+    <div class="row"><button class="pri" id="plOk">${mount?'挂载':'保存'}</button></div></div>`);
+  $('#plOk').onclick=async()=>{const events=[...$('#dlgB').querySelectorAll('[data-pe]:checked')].map(x=>x.dataset.pe),config={};
+    $('#dlgB').querySelectorAll('[data-pc]').forEach(x=>config[x.dataset.pc]=x.value);
+    try{toast((await post('/api/plugin',{id:p.id,enabled:mount||p['启用'],events,config})).msg);dlg.close();render()}catch(e){toast(e.message)}};
+}
+async function plRunDlg(d,p){
+  let ps=[];try{ps=(await api('/api/overview')).periods.map(x=>x.name)}catch(_){}
+  openDlg(`运行一次 · ${p['名称']}`,`<div class="form"><div class="small mut">用这一期的开发仓库运行（开始开发后才有开发仓库），会改动仓库里的文件，和自动运行一样记进这一期的记录。</div>
+    <label>期<select id="prP">${ps.map(x=>`<option>${esc(x)}</option>`).join('')}</select></label>
+    <label>按哪个时机运行<select id="prE">${Object.keys(d.pluginEvents).map(e=>`<option>${esc(e)}</option>`).join('')}</select></label>
+    <div class="row"><button class="pri" id="prGo">运行</button></div></div>`);
+  $('#prGo').onclick=async()=>{const b=$('#prGo');b.disabled=true;b.textContent='运行中…';
+    try{const r=await post('/api/plugin/run',{id:p.id,period:$('#prP').value,event:$('#prE').value});openDlg('运行结果',`<pre style="white-space:pre-wrap">${esc(r.msg)}</pre>`)}
+    catch(e){toast(e.message);b.disabled=false;b.textContent='运行'}};
+}
 async function settingsPage(){
   const d=await api('/api/settings');
   const card=f=>`<div class="bcard"><div class="row" style="justify-content:space-between"><b>${esc(f['名称'])}</b>
@@ -838,6 +862,16 @@ async function settingsPage(){
     <div class="row" style="margin-top:8px"><button data-ed="${esc(f.id)}">编辑</button><button data-cp="${esc(f.id)}">复制为新流程</button>
       ${f['默认']?'':`<button data-df="${esc(f.id)}">设为默认</button>`}<button data-ex="${esc(f.id)}">导出</button>
       ${f['内置']?(f['已修改']?`<button data-rm="${esc(f.id)}">恢复默认</button>`:''):`<button class="danger" data-rm="${esc(f.id)}">删除</button>`}</div></div>`;
+  const pcard=p=>`<div class="bcard"><div class="row" style="justify-content:space-between"><b>${esc(p['名称'])}</b>
+      <span>${p['错误']?'<span class="badge st-已暂停">有错误</span>':p['启用']?'<span class="badge st-开发中">已挂载</span>':'<span class="chip">未挂载</span>'}${p['外部']?' <span class="chip">外部目录</span>':''}</span></div>
+    <div class="small mut" style="margin:4px 0">${esc(p['错误']||p['说明']||'')}</div>
+    ${p['错误']?'':`<div class="small">时机：${p['启用']?p['时机'].map(esc).join('、'):'（挂载后生效）'+(p['时机'].length?' 默认 '+p['时机'].map(esc).join('、'):'')}
+      ${(p['识别文件']||[]).length?' · 仓库里有 '+p['识别文件'].map(x=>'<code>'+esc(x)+'</code>').join(' ')+' 才运行':''}</div>
+      ${(p['配置项']||[]).map(c=>`<div class="small">${esc(c['标题'])}：<b>${esc(p['配置'][c['键']]||'（空）')}</b></div>`).join('')}
+      <div class="small mut">${esc(p['版本']?'版本 '+p['版本']+' · ':'')}<span class="mono">${esc(p['目录'].replace(/^\/Users\/[^/]+/,'~'))}</span></div>`}
+    <div class="row" style="margin-top:8px">${p['错误']?'':`<button class="${p['启用']?'':'pri'}" data-pmount="${esc(p.id)}">${p['启用']?'卸下':'挂载'}</button>
+      <button data-pset="${esc(p.id)}">时机与配置</button><button data-prun="${esc(p.id)}" title="选一期，用它的开发仓库运行一次">运行一次</button>`}
+      ${p['外部']?`<button class="danger" data-prm="${esc(p.id)}">移除</button>`:''}</div></div>`;
   const st=e=>e['状态'],ecard=e=>`<div class="bcard"><div class="row" style="justify-content:space-between"><b>${esc(e['名称'])}</b>
       <span>${e['默认']?'<span class="badge st-开发中">默认</span> ':''}<span class="chip">${e['内置']?'内置'+(e['已修改']?' · 已修改':''):'自定义'}</span></span></div>
     <div class="small mut" style="margin:4px 0">${esc(e['说明']||'')}</div>
@@ -858,8 +892,22 @@ async function settingsPage(){
     默认是「通用模板」；已有自己的流程命令（如 <code>/my-flow</code>）的，点<b>「从命令 / 技能添加」</b>选中它即可自动生成，不用写脚本；
     也可以复制「通用模板」手动改，用「导出 / 导入」在同事之间共享。
     每一期可以在开发面板单独选流程，不选就按仓库里的识别文件自动匹配，匹配不上用默认流程。详见 <a href="#/d/开发流程设置">开发流程设置</a>。</p>
-    <div class="bgrid">${d.flows.map(card).join('')}</div>`;
-  const byId=id=>d.flows.find(f=>f.id===id),eById=id=>d.engines.find(e=>e.id===id);
+    <div class="bgrid">${d.flows.map(card).join('')}</div>
+    <div class="row" style="justify-content:space-between;margin-top:18px"><h2>插件</h2><button id="plAdd">＋ 添加插件目录</button></div>
+    <p class="mut">插件不属于知识库本身（如公司定制的多语言拉取），挂载后在选定的时机自动运行：${Object.entries(d.pluginEvents).map(([k,v])=>`<b>${esc(k)}</b>（${esc(v)}）`).join('；')}。
+    把插件文件夹（含 <code>plugin.json</code>）放进 <code>${esc(d.pluginDir.replace(/^\/Users\/[^/]+/,'~'))}</code>，或添加其他目录；运行失败会记成「需要你处理的问题」，不会拦住开发。详见 <a href="#/d/插件">插件</a>。</p>
+    <div class="bgrid">${d.plugins.map(pcard).join('')||'<div class="mut">还没有插件</div>'}</div>`;
+  const byId=id=>d.flows.find(f=>f.id===id),eById=id=>d.engines.find(e=>e.id===id),pById=id=>d.plugins.find(p=>p.id===id);
+  const plSave=async(p,enabled,events,config)=>{try{toast((await post('/api/plugin',{id:p.id,enabled,events,config})).msg);render()}catch(e){toast(e.message)}};
+  app.querySelectorAll('[data-pmount]').forEach(b=>b.onclick=()=>{const p=pById(b.dataset.pmount);
+    if(p['启用'])return plSave(p,false,p['时机'],p['配置']);plDlg(d,p,true)});
+  app.querySelectorAll('[data-pset]').forEach(b=>b.onclick=()=>plDlg(d,pById(b.dataset.pset),false));
+  app.querySelectorAll('[data-prun]').forEach(b=>b.onclick=()=>plRunDlg(d,pById(b.dataset.prun)));
+  app.querySelectorAll('[data-prm]').forEach(b=>b.onclick=async()=>{const p=pById(b.dataset.prm);if(!confirm(`从列表移除插件「${p['名称']}」？（不删除文件）`))return;
+    try{toast((await post('/api/plugin/remove',{id:p.id})).msg);render()}catch(e){toast(e.message)}});
+  $('#plAdd').onclick=()=>{openDlg('添加插件目录',`<div class="form"><label>插件文件夹的绝对路径（里面要有 plugin.json）<input type="text" id="plP" placeholder="/Users/…/my-plugin"></label>
+      <div class="row"><button class="pri" id="plGo">添加</button></div></div>`);
+    $('#plGo').onclick=async()=>{try{toast((await post('/api/plugin/dir',{path:$('#plP').value.trim()})).msg);dlg.close();render()}catch(e){toast(e.message)}}};
   const strip=o=>{['id','内置','已修改','默认','状态','接入说明'].forEach(k=>delete o[k]);return o};
   app.querySelectorAll('[data-eed]').forEach(b=>b.onclick=()=>engineDlg(d,eById(b.dataset.eed)));
   app.querySelectorAll('[data-ecp]').forEach(b=>b.onclick=()=>{const e=strip({...eById(b.dataset.ecp)});e['名称']+='（副本）';engineDlg(d,e)});

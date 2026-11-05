@@ -11,6 +11,7 @@ AI 只有在「已批准开发 / 开发中」时才能通过 kb_dev_package 拿�
 """
 import argparse
 import filecmp
+import hashlib
 import html
 import json
 import os
@@ -268,7 +269,16 @@ def set_status(period, status, note='', by_human=False):
                                        '操作人': '用户' if by_human else 'AI'})
     save_meta(d, m)
     log(d, '状态', f'{cur} → {status}' + (f'（{note}）' if note else '') + ('' if by_human else '［AI］'))
-    return f'{d.name}：{cur} → {status}'
+    msg = f'{d.name}：{cur} → {status}'
+    if status == '已完成' and cur != '已完成':
+        root = m.get('开发仓库') or ''
+        branch = _git(Path(root), 'branch', '--show-current').stdout.strip() if root and Path(root).is_dir() else ''
+        plug = run_plugins('开发完成', d, root, branch, m.get('SDD目录', ''))
+        if plug:
+            msg += f'\n\n【开发完成时已运行的插件】\n{plug}'
+            if '个文件改动' in plug:
+                msg += '\n插件改动了仓库里的文件：请检查后按仓库惯例提交（如单独一个提交）。'
+    return msg
 
 
 def add_log(period, note):
@@ -2130,6 +2140,173 @@ def base_context():
     return '\n\n'.join(base_entry_md(e, '###') for e in es)
 
 
+# ---------------------------------------------------------------- 插件（挂载到开发的某个时机自动运行）
+# 插件不是知识库的一部分：放在知识库根目录「插件/<名称>/」（不进 git），或在设置里添加其他目录。
+# 每个插件一个 plugin.json（名称、说明、命令、默认时机、识别文件、超时、配置项），在网页「⚙ 设置 → 插件」挂载并选时机。
+# 运行时 cwd 是插件目录，环境变量带上期名、仓库、分支、文档目录和配置；退出码非 0 算失败（记成非阻断问题，不拦截开发）。
+PLUGIN_DIR = ROOT / '插件'
+PLUGIN_EVENTS = {'开发开始': '网页点「开始开发 / 继续开发」后、启动后台 AI 之前',
+                 '开发完成': '期状态改为「已完成」时（AI 用 kb_set_status 标完成，或在网页 / 终端修改）'}
+PLUGIN_ENV = {'KB_EVENT': '时机（开发开始 / 开发完成）', 'KB_PERIOD': '期名', 'KB_PERIOD_DIR': '这一期的资料目录',
+              'KB_REPO': '代码仓库绝对路径', 'KB_BRANCH': '当前分支', 'KB_DOCS': '开发流程的文档目录（可能为空）',
+              'KB_PLUGIN_CONFIG': '设置里填的配置项（JSON）', 'KB_ROOT': '知识库根目录', 'KB_PYTHON': '知识库用的 Python'}
+
+
+def _plugin_dirs():
+    out = []
+    if PLUGIN_DIR.is_dir():
+        out += [p for p in sorted(PLUGIN_DIR.iterdir()) if (p / 'plugin.json').is_file()]
+    for x in load_settings().get('插件目录', []):
+        p = Path(x).expanduser()
+        if p not in out:
+            out.append(p)
+    return out
+
+
+def plugins():
+    """全部插件：plugin.json 的内容 + id、目录、是否外部目录、挂载情况（启用、时机、配置）。"""
+    conf = load_settings().get('插件', {})
+    out = []
+    for p in _plugin_dirs():
+        pid = p.name
+        base = {'id': pid, '目录': str(p), '外部': p.parent != PLUGIN_DIR}
+        try:
+            man = json.loads(read_text(p / 'plugin.json'))
+            if not isinstance(man.get('命令'), list) or not man['命令']:
+                raise ValueError('「命令」要写成数组，如 ["{python}", "main.py"]')
+        except (OSError, ValueError) as e:
+            out.append(dict(base, 名称=pid, 错误=f'plugin.json 读取失败：{e}', 启用=False, 时机=[], 配置={}))
+            continue
+        c = conf.get(pid, {})
+        dft = {x['键']: (x.get('默认') or (x.get('类型', '').split(':', 1)[1].split('|')[0]
+                                            if x.get('类型', '').startswith('select:') else ''))
+               for x in man.get('配置项', [])}
+        out.append(dict(man, **base, 启用=bool(c.get('启用')),
+                        时机=[e for e in c.get('时机', man.get('默认时机', [])) if e in PLUGIN_EVENTS],
+                        配置=dict(dft, **c.get('配置', {}))))
+    return out
+
+
+def get_plugin(pid):
+    p = next((x for x in plugins() if x['id'] == pid), None)
+    if not p:
+        raise KBError(f'没有这个插件：{pid}')
+    return p
+
+
+def save_plugin(pid, enabled, events, config=None):
+    """网页「⚙ 设置 → 插件」：挂载 / 卸下，选时机，填配置。"""
+    p = get_plugin(pid)
+    bad = [e for e in events if e not in PLUGIN_EVENTS]
+    if bad:
+        raise KBError(f'不支持的时机：{"、".join(bad)}；可选 {" / ".join(PLUGIN_EVENTS)}')
+    if enabled and not events:
+        raise KBError('挂载插件至少要选一个时机')
+    s = load_settings()
+    s.setdefault('插件', {})[pid] = {'启用': bool(enabled), '时机': list(events),
+                                   '配置': {k: str(v) for k, v in (config or {}).items()
+                                            if k in {x['键'] for x in p.get('配置项', [])}}}
+    save_settings(s)
+    return f'插件「{p["名称"]}」' + (f'已挂载：{"、".join(events)}' if enabled else '已卸下')
+
+
+def add_plugin_dir(path):
+    p = Path(path).expanduser().resolve()
+    if not (p / 'plugin.json').is_file():
+        raise KBError(f'{p} 下没有 plugin.json')
+    s = load_settings()
+    ds = s.setdefault('插件目录', [])
+    if p.parent == PLUGIN_DIR or str(p) in ds:
+        return f'已经有这个插件：{p.name}'
+    if p.name in {x.name for x in _plugin_dirs()}:
+        raise KBError(f'已有同名插件「{p.name}」，请改目录名后再添加')
+    ds.append(str(p))
+    save_settings(s)
+    return f'已添加插件目录：{p}（在列表里点「挂载」后才会运行）'
+
+
+def remove_plugin_dir(pid):
+    p = get_plugin(pid)
+    if not p['外部']:
+        raise KBError(f'「{p["名称"]}」在知识库的插件目录里，删除请直接删文件夹：{p["目录"]}')
+    s = load_settings()
+    s['插件目录'] = [x for x in s.get('插件目录', []) if Path(x).expanduser() != Path(p['目录'])]
+    s.get('插件', {}).pop(pid, None)
+    save_settings(s)
+    return f'已移除插件「{p["名称"]}」（文件没动：{p["目录"]}）'
+
+
+def _git_changed(root):
+    """仓库里有改动的文件 → 内容摘要（插件运行前后对比，找出插件改了哪些文件）。"""
+    r = _git(root, 'status', '--porcelain', '-uall')
+    out = {}
+    for ln in r.stdout.splitlines() if r.returncode == 0 else []:
+        f = ln[3:].split(' -> ')[-1].strip('"')
+        try:
+            out[f] = hashlib.md5((Path(root) / f).read_bytes()).hexdigest()
+        except OSError:
+            out[f] = ''
+    return out
+
+
+def run_plugins(event, d, root='', branch='', docs='', only=''):
+    """在某个时机运行挂载的插件（only：手动运行指定插件，不看挂载和时机）。返回给人 / AI 看的结果，没有插件运行时为空。"""
+    res = []
+    for p in plugins():
+        if only and p['id'] != only:
+            continue
+        if not only and not (p['启用'] and event in p['时机']):
+            continue
+        name = p.get('名称') or p['id']
+        if p.get('错误'):
+            res.append(f'插件「{name}」没有运行：{p["错误"]}')
+            continue
+        if not root or not Path(root).is_dir():
+            res.append(f'插件「{name}」没有运行：这一期还没有确定代码仓库')
+            continue
+        root = Path(root)
+        miss = [x for x in p.get('识别文件', []) if not (root / x).exists()]
+        if miss:
+            if only:
+                res.append(f'插件「{name}」没有运行：仓库 {root.name} 里没有 {"、".join(miss)}')
+            continue
+        before = _git_changed(root)
+        env = dict(os.environ, KB_EVENT=event, KB_PERIOD=d.name, KB_PERIOD_DIR=str(d), KB_REPO=str(root),
+                   KB_BRANCH=branch or '', KB_DOCS=str(docs or ''), KB_ROOT=str(ROOT), KB_PYTHON=sys.executable,
+                   KB_PLUGIN_CONFIG=json.dumps(p['配置'], ensure_ascii=False))
+        cmd = [sys.executable if x == '{python}' else x for x in p['命令']]
+        t0 = time.time()
+        try:
+            r = subprocess.run(cmd, cwd=p['目录'], env=env, capture_output=True, text=True,
+                               timeout=int(p.get('超时') or 300))
+            ok, out = r.returncode == 0, (r.stdout + ('\n' + r.stderr if r.stderr.strip() else '')).strip()
+        except subprocess.TimeoutExpired:
+            ok, out = False, f'超时（{p.get("超时") or 300} 秒）'
+        except OSError as e:
+            ok, out = False, f'启动失败：{e}'
+        after = _git_changed(root)
+        changed = sorted(f for f in set(before) | set(after) if before.get(f) != after.get(f))
+        head = (f'插件「{name}」（{event}）{"完成" if ok else "失败"}，用时 {time.time() - t0:.0f} 秒，'
+                + (f'仓库 {root.name} 有 {len(changed)} 个文件改动' if changed else '没有文件改动'))
+        log(d, '插件', f'{head}：{out[-1500:]}')
+        if not ok:
+            _add_issue(d, f'插件「{name}」运行失败（{event}）', out[-2000:], kind='工具链', source='插件',
+                       key=f'插件:{p["id"]}:{event}')
+        res.append(head + (f'\n{out[-3000:]}' if out else ''))
+    return '\n\n'.join(res)
+
+
+def run_plugin_now(pid, period, event='开发开始'):
+    """手动运行一次（网页「运行一次」/ kb plugin run），用这一期的开发仓库。"""
+    d = period_dir(period)
+    m = load_meta(d)
+    root = m.get('开发仓库') or ''
+    if not root:
+        raise KBError(f'「{d.name}」还没有确定开发仓库（开始开发时会确定）')
+    cur = _git(Path(root), 'branch', '--show-current').stdout.strip() if Path(root).is_dir() else ''
+    return run_plugins(event, d, root, cur, m.get('SDD目录', ''), only=get_plugin(pid)['id']) or '没有运行'
+
+
 # ---------------------------------------------------------------- 开发会话 / 待确认 / 免打扰 / 进度
 # 网页「开始开发」= 用户本人批准 + 在目标仓库后台启动 Claude Code（claude -p，auto 权限）跑 /sdd* 流程。
 # 需要人确认的地方走 kb_ask → 网页回答 → kb_wait_answer；开启免打扰后由 AI 按自己的建议决策。
@@ -2727,10 +2904,14 @@ def dev_start(period, note='', repo='', branch='', keep_branch=False):
     m['SDD目录'] = str(docs)
     m['开发会话'] = {'备注': note, '流程': f['id'], '引擎': eng['id']}
     save_meta(d, m)
-    proc = _dev_spawn(d, root, branch, _dev_prompt(d.name, root, branch, f, docs), '', 续跑次数=0)
+    plug = run_plugins('开发开始', d, root, branch, docs)
+    prompt = _dev_prompt(d.name, root, branch, f, docs)
+    if plug:
+        prompt += f'\n\n【开发开始时已运行的插件】（知识库自动运行，结果供参考）\n{plug}'
+    proc = _dev_spawn(d, root, branch, prompt, '', 续跑次数=0)
     log(d, '开始开发', f'后台会话 pid {proc.pid}（{eng["名称"]} · {f["名称"]} · {root.name} · {branch}）' + (f'；{note}' if note else ''))
     return (f'已开始开发「{d.name}」：后台会话 pid {proc.pid}，{eng["名称"]}，流程「{f["名称"]}」，仓库 {root.name}（{branch}）'
-            + (''.join(f'\n{x}' for x in steps) if steps else ''))
+            + (''.join(f'\n{x}' for x in steps) if steps else '') + (f'\n\n{plug}' if plug else ''))
 
 
 def dev_stop(period, by='用户'):
@@ -4643,6 +4824,11 @@ def main(argv=None):
     x.add_argument('name', nargs='?', default='')
     x.add_argument('sid', nargs='?', default='')
     x.add_argument('--all', action='store_true')
+    x = sp.add_parser('plugin', help='插件：kb plugin（列出）；kb plugin run <插件> <期名> [开发开始|开发完成]（手动运行一次）')
+    x.add_argument('action', nargs='?', default='list', choices=['list', 'run'])
+    x.add_argument('plugin', nargs='?', default='')
+    x.add_argument('name', nargs='?', default='')
+    x.add_argument('event', nargs='?', default='开发开始')
     sp.add_parser('serve', help='以 MCP（stdio）方式运行')
     x = sp.add_parser('web', help='启动本地网页（默认 http://127.0.0.1:11555）')
     x.add_argument('--port', type=int, default=11555)
@@ -4704,6 +4890,14 @@ def main(argv=None):
             r = set_status(a.name, a.status, a.note, by_human=True)
         elif a.cmd == 'log':
             r = add_log(a.name, a.note)
+        elif a.cmd == 'plugin':
+            if a.action == 'run':
+                if not a.plugin or not a.name:
+                    raise KBError('用法：kb plugin run <插件> <期名> [开发开始|开发完成]')
+                r = run_plugin_now(a.plugin, a.name, a.event)
+            else:
+                r = '\n'.join(f'{p["id"]}：{p.get("名称", "")} · ' + (p.get('错误') or (f'已挂载（{"、".join(p["时机"])}）' if p['启用'] else '未挂载'))
+                              + f' · {p["目录"]}' for p in plugins()) or f'没有插件（放到 {PLUGIN_DIR}/<名称>/plugin.json）'
         print(r)
     except KBError as e:
         print(f'✗ {e}', file=sys.stderr)

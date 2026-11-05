@@ -347,7 +347,9 @@ class H(BaseHTTPRequestHandler):
             return self._guard(lambda: {'flows': kb.flows(), 'fields': kb.FLOW_FIELDS, 'vars': kb.FLOW_VARS,
                                         'engines': [dict(e, 状态=kb.engine_status(e), 接入说明=kb.engine_link_help(e))
                                                     for e in kb.engines()],
-                                        'engineFields': kb.ENGINE_FIELDS, 'engineVars': kb.ENGINE_VARS})
+                                        'engineFields': kb.ENGINE_FIELDS, 'engineVars': kb.ENGINE_VARS,
+                                        'plugins': kb.plugins(), 'pluginEvents': kb.PLUGIN_EVENTS,
+                                        'pluginEnv': kb.PLUGIN_ENV, 'pluginDir': str(kb.PLUGIN_DIR)})
         if u.path == '/api/settings/commands':
             return self._guard(lambda: {'items': kb.list_commands()})
         if u.path == '/api/adds':
@@ -404,7 +406,8 @@ class H(BaseHTTPRequestHandler):
                       '/api/base/secret', '/api/refresh/claude', '/api/add', '/api/settings/flow',
                       '/api/settings/flow/delete', '/api/settings/default', '/api/period/flow', '/api/settings/flow/draft',
                       '/api/engine', '/api/engine/delete', '/api/engine/default', '/api/engine/link', '/api/engine/test',
-                      '/api/period/engine', '/api/retest', '/api/retest/plan', '/api/issue', '/api/device', '/api/dev/chat') and not self._from_page():
+                      '/api/period/engine', '/api/retest', '/api/retest/plan', '/api/issue', '/api/device', '/api/dev/chat',
+                      '/api/plugin', '/api/plugin/dir', '/api/plugin/remove', '/api/plugin/run') and not self._from_page():
             return self._send(403, {'error': '只能在知识库网页上由本人操作'})
         if u.path == '/api/base/save':
             return self._guard(lambda: {'msg': kb.base_save(body.get('id', ''), body.get('category', ''), body.get('name'),
@@ -475,6 +478,16 @@ class H(BaseHTTPRequestHandler):
             return self._guard(lambda: {'msg': kb.refresh_sources(body.get('period', ''), body.get('sid', ''), by='用户（网页）')})
         if u.path == '/api/refresh/claude':
             return self._guard(lambda: {'msg': kb.claude_update(body.get('period', ''))})
+        if u.path == '/api/plugin':
+            return self._guard(lambda: {'msg': kb.save_plugin(body.get('id', ''), bool(body.get('enabled')),
+                                                              body.get('events') or [], body.get('config') or {})})
+        if u.path == '/api/plugin/dir':
+            return self._guard(lambda: {'msg': kb.add_plugin_dir(body.get('path', ''))})
+        if u.path == '/api/plugin/remove':
+            return self._guard(lambda: {'msg': kb.remove_plugin_dir(body.get('id', ''))})
+        if u.path == '/api/plugin/run':
+            return self._guard(lambda: {'msg': kb.run_plugin_now(body.get('id', ''), body.get('period', ''),
+                                                                 body.get('event') or '开发开始')})
         if u.path == '/api/settings/flow':
             return self._guard(lambda: dict(zip(('msg', 'id'), kb.save_flow(body.get('flow') or {}))))
         if u.path == '/api/engine':
