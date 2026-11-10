@@ -13,7 +13,7 @@ import time
 from contextlib import contextmanager
 from pathlib import Path
 
-SYS = Path(__file__).resolve().parent
+SYS = Path(__file__).resolve().parents[2]      # kblib/infra/devlock.py → _system
 ROOT = Path(os.environ.get('KB_ROOT') or SYS.parent)
 FILE = ROOT / '设备占用.json'
 LOCK = ROOT / '.设备占用.lock'

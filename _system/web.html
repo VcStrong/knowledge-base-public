@@ -30,7 +30,10 @@ a{color:var(--acc);text-decoration:none;cursor:pointer}
 .side{background:var(--side);color:var(--side-fg);padding:18px 12px;position:sticky;top:0;height:100vh;overflow:auto;display:flex;flex-direction:column;gap:2px}
 .brand{display:flex;align-items:center;gap:10px;color:var(--side-act);font-weight:700;font-size:16px;padding:4px 10px 14px}
 .brand i{display:grid;place-items:center;width:30px;height:30px;border-radius:8px;background:var(--acc);color:#fff;font-style:normal;font-size:13px}
-.navh{font-size:11px;letter-spacing:.08em;opacity:.55;padding:12px 10px 4px}
+.navh{font-size:11px;letter-spacing:.08em;opacity:.55;padding:12px 10px 4px;cursor:pointer;user-select:none;display:flex;align-items:center;gap:4px}
+.navh:hover{opacity:.85}.navh::before{content:'›';font-size:14px;line-height:1;width:10px;display:inline-block;text-align:center;transform:rotate(90deg);transition:transform .15s}.navh.fold::before{transform:none}
+.navh .hd{width:6px;height:6px;border-radius:50%;background:var(--s1);display:none}.navh.fold.alert .hd{display:inline-block}
+.navh.fold+.navb{display:none}.navb{display:flex;flex-direction:column;gap:2px}
 .nav{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;color:var(--side-fg);min-width:0}
 .nav:hover{background:rgba(255,255,255,.06);color:var(--side-act)}
 .nav.on{background:rgba(255,255,255,.12);color:var(--side-act);font-weight:500}
@@ -104,6 +107,7 @@ details.cat>summary.hd>b{flex:1}
 .hit .s{white-space:pre-wrap;word-break:break-word}
 dialog{border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--fg);width:min(1000px,94vw);max-height:90vh;padding:0}
 dialog::backdrop{background:rgba(0,0,0,.45)}
+dialog.mini{width:min(460px,92vw);margin:auto}
 dialog .hd{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line);gap:8px}
 dialog .bd{padding:12px 14px;overflow:auto;max-height:calc(90vh - 52px)}
 dialog pre{white-space:pre-wrap;word-break:break-word;font-size:12.5px;margin:0}
@@ -146,6 +150,14 @@ button.danger{border-color:var(--warn);color:var(--warn)}
 .legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px}
 .legend b{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px}
 .act{max-height:320px;overflow:auto;font-size:12.5px}
+.raw .msg{border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin:8px 0;background:var(--card)}
+.raw .msg.u{border-color:var(--info);background:color-mix(in srgb,var(--info) 7%,var(--card))}
+.raw .msg .who{font-size:12px;color:var(--mut);margin-bottom:2px}
+.raw .msg .md{border:0;padding:0;margin:0;background:none;box-shadow:none;max-width:none;overflow-wrap:anywhere}
+.raw .steps{font-size:12.5px;margin:4px 0 4px 14px;color:var(--mut)}
+.raw .tools{font-size:12.5px;margin-top:4px}.raw .tools pre{max-height:260px;overflow:auto;white-space:pre-wrap;word-break:break-all;font-size:12px}
+.cand{border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin:8px 0;background:var(--card)}
+.pushin textarea{width:100%}
 .act div{padding:4px 0;border-bottom:1px solid var(--soft);word-break:break-word;white-space:pre-wrap}
 .live{width:8px;height:8px;border-radius:50%;background:var(--mut);display:inline-block;opacity:.5}.live.on{background:#2ea44f;opacity:1}
 .act .tool{color:var(--mut)}.act .end{font-weight:600}.act .sess{color:var(--acc);font-weight:600;border-bottom:none;padding-top:10px}
@@ -239,6 +251,11 @@ button.danger{border-color:var(--warn);color:var(--warn)}
   <a class="nav" data-nav="/phones" href="#/phones"><span class="t">▯ 手机</span><span class="n" id="navPh"></span></a>
   <div class="navh">期</div>
   <div class="plist" id="navPs"></div>
+  <div class="navh">事项</div>
+  <a class="nav" data-nav="/bugs" href="#/bugs" title="Bug 平台（禅道、Jira…）的 Bug：自动归到期，认不出的待归纳"><span class="t">🐞 Bug</span><span class="n" id="navBug"></span></a>
+  <a class="nav" data-nav="/anr" href="#/anr" title="ANR / 崩溃：按堆栈合并、计数、mapping 还原"><span class="t">💥 ANR / 崩溃</span><span class="n" id="navAnr"></span></a>
+  <div id="navEnt"></div>
+  <div class="plist" id="navTs"></div>
   <div class="navh">共用</div>
   <a class="nav" data-nav="/base" href="#/base"><span class="t">◈ 基础信息</span></a>
   <div class="navh">系统</div>
@@ -269,14 +286,38 @@ const post=(u,b)=>api(u,{method:'POST',headers:{'Content-Type':'application/json
 const badge=s=>`<span class="badge st-${esc(s)}">${esc(s)}</span>`;
 const fileUrl=p=>'/file?path='+enc(p);
 
+let entries=[],ovPeriods=[];
 let ovFilter='全部';try{ovFilter=localStorage.getItem('kb.ovFilter')||'全部'}catch(_){}
 const DOT={收集中:'var(--s0)',已批准开发:'var(--info)',开发中:'var(--s2)',已完成:'var(--s3)',已暂停:'var(--s1)'};
 // 左侧导航：期列表（状态色点 + 待确认 / 问题数）、手机空闲数、当前页高亮
+// 侧边栏按分类折叠：每个分类标题点一下收起 / 展开，记在本机浏览器；收起的分类里有待确认 / 问题时标题后亮个点
+let navFold={};try{navFold=JSON.parse(localStorage.getItem('kb.navFold')||'{}')}catch(_){}
+(function navGroups(){
+  const side=document.querySelector('.side');
+  side.querySelectorAll(':scope>.navh').forEach(h=>{
+    const b=document.createElement('div');b.className='navb';
+    let n=h.nextElementSibling;while(n&&!n.classList.contains('navh')&&!n.classList.contains('foot')){const nx=n.nextElementSibling;b.appendChild(n);n=nx}
+    h.after(b);const k=h.textContent.trim();h.dataset.g=k;h.insertAdjacentHTML('beforeend','<i class="hd"></i>');h.title='点击收起 / 展开';
+    h.classList.toggle('fold',!!navFold[k]);
+    h.onclick=()=>{navFold[k]=!navFold[k];if(!navFold[k])delete navFold[k];h.classList.toggle('fold',!!navFold[k]);try{localStorage.setItem('kb.navFold',JSON.stringify(navFold))}catch(_){}};
+  });
+})();
+function navAlerts(){document.querySelectorAll('.side .navh').forEach(h=>{const b=h.nextElementSibling;h.classList.toggle('alert',!!(b&&b.querySelector('.n.w:not(:empty),.n.q:not(:empty)')))})}
 function sideNav(d){
-  if(d){$('#navPs').innerHTML=d.periods.map(p=>`<a class="nav" data-nav="/p/${esc(p.name)}" href="#/p/${enc(p.name)}" title="${esc(p.name)} · ${esc(p.status)}"><span class="d" style="background:${DOT[p.status]||'var(--s0)'}"></span><span class="t">${esc(p.name)}</span>${p.pendingQ?`<span class="n q">${p.pendingQ}</span>`:''}${p.issues?`<span class="n w">${p.issues}</span>`:''}</a>`).join('');
-    $('#navPh').textContent=d.phones?`${d.phones.free}/${d.phones.total}`:''}
+  if(d){periodNames=d.periods.filter(p=>p.kind!=='事项').map(p=>p.name);taskNames=d.periods.filter(p=>p.kind==='事项').map(p=>p.name);
+    const navItem=p=>`<a class="nav" data-nav="/p/${esc(p.name)}" href="#/p/${enc(p.name)}" title="${esc(p.name)} · ${esc(p.status)}"><span class="d" style="background:${DOT[p.status]||'var(--s0)'}"></span><span class="t">${esc(p.name)}</span>${p.pendingQ?`<span class="n q">${p.pendingQ}</span>`:''}${p.issues?`<span class="n w">${p.issues}</span>`:''}</a>`;
+    $('#navPs').innerHTML=d.periods.filter(p=>p.kind!=='事项').map(navItem).join('');
+    $('#navTs').innerHTML=d.periods.filter(p=>p.kind==='事项'&&p.status!=='已完成'&&!(p.plugins||[]).length).map(navItem).join('')||'<span class="mut small" style="padding:4px 12px;display:block">没有进行中的事项</span>';
+    $('#navPh').textContent=d.phones?`${d.phones.free}/${d.phones.total}`:'';
+    const nb=$('#navBug');nb.textContent=d.zentao&&d.zentao.pending?d.zentao.pending:'';nb.title='待归纳（未关闭）';nb.classList.toggle('w',!!(d.zentao&&d.zentao.pending));
+    entries=d.entries||[];ovPeriods=d.periods;
+    $('#navEnt').innerHTML=entries.map(x=>{const ts=d.periods.filter(p=>(p.plugins||[]).includes(x.id)&&p.status!=='已完成'),q=ts.reduce((a,p)=>a+(p.pendingQ||0),0);
+      return `<a class="nav" data-nav="/tool/${esc(x.id)}" href="#/tool/${enc(x.id)}" title="${esc(x['说明']||'')}${ts.length?' · 待解决 '+ts.length+' 条':''}"><span class="t">${esc(x['图标'])} ${esc(x['名称'])}</span>${q?`<span class="n q" title="${q} 个待你确认">${q}</span>`:ts.length?`<span class="n">${ts.length}</span>`:''}</a>`}).join('');
+    const na=$('#navAnr'),at=d.anr?d.anr.todo:0;na.textContent=at||'';na.title='待处理：没关联事项，或事项完成后又出现';na.classList.toggle('w',!!at)}
   const h=decodeURIComponent(location.hash.slice(1)||'/');
-  document.querySelectorAll('.side .nav').forEach(a=>{const k=a.dataset.nav;a.classList.toggle('on',k==='/'?h==='/':k==='/d/'?h.startsWith('/d/'):h===k)});
+  const pt=h.startsWith('/p/')&&ovPeriods.find(p=>p.name===h.slice(3)&&(p.plugins||[]).length),hh=pt?'/tool/'+pt.plugins[0]:h;
+  document.querySelectorAll('.side .nav').forEach(a=>{const k=a.dataset.nav;a.classList.toggle('on',k==='/'?hh==='/':k==='/d/'?hh.startsWith('/d/'):hh===k)});
+  navAlerts();
 }
 async function navRefresh(){try{sideNav(await api('/api/overview'))}catch(_){}}
 
@@ -284,8 +325,9 @@ async function overview(){
   const d=await api('/api/overview');
   try{d.adds=(await api('/api/adds')).items}catch(_){d.adds=[]}
   sideNav(d);
+  const tasks=d.periods.filter(p=>p.kind==='事项');d.periods=d.periods.filter(p=>p.kind!=='事项');
   const cnt=s=>d.periods.filter(p=>s==='全部'||p.status===s).length;
-  const sum=k=>d.periods.reduce((a,p)=>a+(p[k]||0),0);
+  const sum=k=>d.periods.concat(tasks).reduce((a,p)=>a+(p[k]||0),0);
   const list=d.periods.filter(p=>ovFilter==='全部'||p.status===ovFilter);
   const tag=(cls,t,tip)=>`<span class="badge ${cls}"${tip?` title="${esc(tip)}"`:''}>${t}</span>`;
   const card=p=>`<a class="pcard2" href="#/p/${enc(p.name)}">
@@ -295,14 +337,14 @@ async function overview(){
       <div class="meta">${d.cats.map(c=>`<span class="${p.counts[c]?'':'zero'}">${c} ${p.counts[c]}</span>`).join('')}<span class="${p.designImages?'':'zero'}">设计稿 ${p.designImages}</span></div>
       ${p.branches&&p.branches.length?`<div class="meta mono" title="开发分支">🌿 ${esc(p.branches.join('；'))}</div>`:''}</div>
     <div class="pf">${p.pendingQ?tag('st-已批准开发',`🔔 ${p.pendingQ} 个待确认`):''}${p.issues?tag('st-已暂停2',`⚠ ${p.issues} 个问题`,'不阻断开发、但要你处理的问题（手机不够、缺账号等）'):''}
-      ${p.retest?tag('st-收集中',`🔁 ${p.autoRetest?'等条件自动复测':'可复测'}`):''}${p.dnd?tag('st-收集中','🌙 免打扰'):''}
+      ${p.bugs?`<span class="badge st-开发中" title="归到这一期、未关闭的 Bug">🐞 ${p.bugs}</span>`:''}${p.retest?tag('st-收集中',`🔁 ${p.autoRetest?'等条件自动复测':'可复测'}`):''}${p.dnd?tag('st-收集中','🌙 免打扰'):''}
       ${p.sources?tag(p.pendingSources?'st-已暂停2':'st-收集中',`来源 ${p.sources}${p.pendingSources?' · '+p.pendingSources+' 待核对':' · 已核对'}`):''}
       ${p.staleSources?tag('st-已暂停2',`⚠ ${p.staleSources} 条原文有变化`):''}${p.imagesWithoutNote?tag('st-已暂停2',`${p.imagesWithoutNote} 张图无说明`):''}
       <span class="lt">${p.lastLog?esc(p.lastLog.time):''}</span></div></a>`;
   const ph=d.phones;
   app.innerHTML=`
   <div class="pagehead"><div><h1>总览</h1><p class="mut">按「期」管理需求、设计稿、接口文档和零散资料；资料齐了就在期里一键开始开发。</p></div>
-    <div class="mut small">已索引资料 ${d.docs} · 代码仓库 ${d.repos.length}${d.inbox.length?` · <b style="color:var(--s1)">收件箱 ${d.inbox.length} 个待整理</b>`:''}</div></div>
+    <div class="mut small">${d.zentao&&d.zentao.open?`<a href="#/bugs">🐞 Bug ${d.zentao.open}${d.zentao.pending?` · <b style="color:var(--s1)">${d.zentao.pending} 待归纳</b>`:''}</a> · `:''}已索引资料 ${d.docs} · 代码仓库 ${d.repos.length}${d.inbox.length?` · <b style="color:var(--s1)">收件箱 ${d.inbox.length} 个待整理</b>`:''}</div></div>
   <section class="kpis">
     <div class="kpi" style="--c:var(--s2)"><div><div class="k">开发中</div><div class="v">${cnt('开发中')}</div></div><span class="mut small">已批准待开工 ${cnt('已批准开发')}</span></div>
     <div class="kpi" style="--c:var(--s1)"><div><div class="k">待你确认</div><div class="v">${sum('pendingQ')}</div></div></div>
@@ -311,6 +353,8 @@ async function overview(){
   </section>
   <div class="fchips">${['全部',...ORDER].map(s=>`<button class="fchip ${s===ovFilter?'on':''}" data-f="${s}">${s}<b>${cnt(s)}</b></button>`).join('')}</div>
   <section class="pgrid">${list.map(card).join('')||'<p class="mut">这个状态下还没有期。</p>'}</section>
+  <div class="row" style="justify-content:space-between;margin-top:22px"><h2 style="margin:0">事项 <span class="mut small" style="font-weight:400">不是产品需求、但要推动的工作：用户上报的 ANR、加埋点、线上问题、优化、调研、其他</span></h2><button id="ovTask">＋ 新建事项</button></div>
+  ${taskTable(tasks)}
   ${d.adds&&d.adds.length?`<h2>模糊添加 <a class="small" id="ovAdd" style="font-weight:normal">查看全部</a></h2>${d.adds.slice(0,3).map(addRec).join('')}`:''}
   ${d.inbox.length?`<h2>收件箱（${d.inbox.length}）</h2>
   <div class="cat"><div class="bd"><ul class="files">${d.inbox.map(f=>`<li><span>${esc(f.name)}${f.isDir?'/':''}</span><span class="mut small">${size(f.size)}</span></li>`).join('')}</ul>
@@ -320,6 +364,7 @@ async function overview(){
   <p class="mut small">知识库目录：${esc(d.root)}　·　<a href="#/d/使用说明">使用说明</a></p>`;
   app.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{ovFilter=b.dataset.f;try{localStorage.setItem('kb.ovFilter',ovFilter)}catch(_){}overview()});
   if($('#ovAdd'))$('#ovAdd').onclick=()=>addDlg();
+  $('#ovTask').onclick=()=>addDlg('task');
   const g=$('#ibGo');if(g)g.onclick=async()=>{try{const r=await post('/api/inbox',{period:$('#ibP').value});toast(r.msg);render()}catch(e){toast(e.message)}};
 }
 
@@ -343,8 +388,334 @@ const size=n=>n>1048576?(n/1048576).toFixed(1)+' MB':n>1024?(n/1024).toFixed(0)+
 const when=t=>new Date(t*1000).toLocaleString('zh-CN',{hour12:false}).slice(0,16);
 
 let ptabs={};try{ptabs=JSON.parse(localStorage.getItem('kb.ptabs')||'{}')}catch(_){}
+// ---- 事项：和期一样的资料 / 确认 / 开发能力，默认轻量流程，单独列出
+let taskNames=[];
+const PRI_C={高:'st-已暂停2',中:'st-收集中',低:'st-已完成'};
+function taskTable(ts){
+  if(!ts.length)return '<p class="mut">还没有事项。用户上报的 ANR、要加的埋点、线上问题……点「＋ 新建事项」，或在 🐞 Bug 页把待归纳的 Bug 归入事项。</p>';
+  const open=ts.filter(t=>t.status!=='已完成'),done=ts.filter(t=>t.status==='已完成');
+  const row=t=>`<tr><td><a href="#/p/${enc(t.name)}"><b>${esc(t.name)}</b></a><div class="mut small">${esc(t.summary||'')}</div></td>
+    <td><span class="badge st-收集中">${esc(t.taskKind||'其他')}</span></td><td><span class="badge ${PRI_C[t.priority]||''}">${esc(t.priority||'中')}</span></td>
+    <td>${badge(t.status)}${t.running?' <span class="badge st-开发中">● 处理中</span>':''}${t.pendingQ?` <span class="badge st-已批准开发">🔔 ${t.pendingQ}</span>`:''}</td>
+    <td>${t.bugs?`🐞 ${t.bugs}`:''}</td><td class="small mut">${esc(t.from||'')}</td><td class="small mut">${esc(t.lastLog?t.lastLog.time:t.created)}</td></tr>`;
+  const head='<tr><th>事项</th><th style="width:96px">类型</th><th style="width:72px">优先级</th><th style="width:170px">状态</th><th style="width:60px">Bug</th><th style="width:150px">来自</th><th style="width:130px">最近</th></tr>';
+  const order=a=>a.slice().sort((x,y)=>(['高','中','低'].indexOf(x.priority)-['高','中','低'].indexOf(y.priority))||String(y.updated||'').localeCompare(String(x.updated||'')));
+  return `<div class="tw"><table>${head}${order(open).map(row).join('')||'<tr><td colspan="7" class="mut">没有进行中的事项</td></tr>'}</table></div>
+    ${done.length?`<details style="margin-top:6px"><summary class="small mut">已完成 ${done.length}</summary><div class="tw"><table>${head}${done.map(row).join('')}</table></div></details>`:''}`}
+function taskForm(o){return `<label>名称<input type="text" id="tkN" value="${esc(o.name||'')}" placeholder="简短说清是什么，如：歌房进房 ANR / 礼物面板曝光埋点" ${o.edit?'disabled':''}></label>
+  <div class="row"><label style="flex:1">类型<select id="tkK">${o.edit?'':'<option value="">自动判断</option>'}${o.kinds.map(k=>`<option ${k===o.kind?'selected':''}>${k}</option>`).join('')}</select></label>
+    <label style="flex:1">优先级<select id="tkP">${o.pris.map(k=>`<option ${k===(o.priority||'中')?'selected':''}>${k}</option>`).join('')}</select></label></div>
+  <label>来自（可空）<input type="text" id="tkF" value="${esc(o.from||'')}" placeholder="如：用户反馈 vv号 123 / Bugly / 产品 小王"></label>
+  <label>说明（可空）<textarea id="tkS" rows="3" placeholder="现象 / 要做什么、影响范围；日志、截图建好后拖进资料">${esc(o.summary||'')}</textarea></label>`}
+
+// ---- Bug：知识库只存索引（链接 + 简介），原文以 Bug 平台（禅道、Jira…）为准
+const BUG_ST={激活:'st-开发中',已解决:'st-已批准开发',已关闭:'st-已完成'};
+let bugF={owner:'待归纳',st:'未关闭',q:''};try{Object.assign(bugF,JSON.parse(localStorage.getItem('kb.bugF')||'{}'))}catch(_){}
+let periodNames=[];
+const kbPeriods=d=>periodNames.length?periodNames:(periodNames=[d.name]);
+function ownerSel(b,ps){const o=b['归属']||{},cur=o['类型']==='期'||o['类型']==='事项'?o['名称']:o['类型'];
+  const ts=taskNames.slice();if(o['类型']==='事项'&&!ts.includes(o['名称']))ts.push(o['名称']);
+  const op=x=>`<option value="${esc(x)}" ${x===cur?'selected':''}>${esc(x==='未关联'?'未关联（别的功能）':x)}</option>`;
+  return `<select data-bown="${esc(b['编号'])}" title="${esc((o['依据']||'')+(o['时间']?' · '+o['时间']:''))}" style="max-width:220px">${op('待归纳')}${o['类型']==='未关联'?op('未关联'):''}
+    ${ps.length?`<optgroup label="期">${ps.map(op).join('')}</optgroup>`:''}${ts.length?`<optgroup label="事项">${ts.map(op).join('')}</optgroup>`:''}<option value="__task">＋ 新建事项…</option></select>
+    <div class="mut small" style="margin-top:2px">${esc(o['依据']||'')}</div>`}
+const BUG_ORD={激活:0,已解决:1,已关闭:2};
+let bugSort='状态';try{bugSort=localStorage.getItem('kb.bugSort')||'状态'}catch(_){}
+const BUG_SORTS={状态:(a,b)=>(BUG_ORD[a['状态']]??9)-(BUG_ORD[b['状态']]??9)||(+a['严重']||9)-(+b['严重']||9)||String(b['修改时间']).localeCompare(String(a['修改时间'])),
+  严重:(a,b)=>(+a['严重']||9)-(+b['严重']||9)||(BUG_ORD[a['状态']]??9)-(BUG_ORD[b['状态']]??9),
+  最近修改:(a,b)=>String(b['修改时间']).localeCompare(String(a['修改时间'])),
+  分析:(a,b)=>anRank(a)-anRank(b)||(BUG_ORD[a['状态']]??9)-(BUG_ORD[b['状态']]??9)};
+// 知识库里标了「已修复」的，不管按什么排都沉到下面（组内按所选方式排）
+const bugDone=b=>b['修复']&&b['修复']['状态']==='已修复'?1:0;
+Object.keys(BUG_SORTS).forEach(k=>{const f=BUG_SORTS[k];BUG_SORTS[k]=(a,b)=>bugDone(a)-bugDone(b)||f(a,b)});
+const AN_ST={待审核:'st-已批准开发',已通过:'st-已完成',需重分析:'st-已暂停2'};
+function anRank(b){const a=b['分析'],f=b['修复'];return f?(f['状态']==='已修复'?6:1):b['分析中']?2:!a?4:a['过时']?3:a['状态']==='需重分析'||a['状态']==='待审核'?0:a['状态']==='已通过'?1:5}
+function anCell(b){const a=b['分析'];
+  if(b['分析中'])return '<span class="badge st-开发中">● 分析中</span>';
+  const btn=`<button class="small" data-ban="${esc(b['编号'])}" title="后台只读分析：实时拉取 Bug，对照本期分支改动和代码，给出代码位置和修复思路">${a?'重新分析':'🔍 分析'}</button>`;
+  if(!a)return b['状态']==='已关闭'?'':btn;
+  return `<a data-bav="${esc(b['编号'])}" title="${esc(a['摘要']||'')}"><span class="badge ${AN_ST[a['状态']]||''}">${esc(a['状态'])}</span>${a['过时']?' <span class="badge st-已暂停2" title="分析之后平台上又改过">可能过时</span>':''} <span class="small mut">置信度${esc(a['置信度']||'?')}</span>
+    <div class="small" style="margin-top:2px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a['摘要']||'')}</div></a>${a['过时']||a['状态']==='需重分析'?'<div style="margin-top:3px">'+btn+'</div>':''}`}
+function fixCell(b){const f=b['修复'],a=b['分析'];
+  if(f&&f['状态']==='修复中')return '<div style="margin-top:4px"><span class="badge st-开发中">🔧 修复中</span></div>';
+  if(f&&f['状态']==='排队中')return `<div style="margin-top:4px"><span class="badge ${f['阻塞']?'st-已暂停2':'st-已批准开发'}" title="${esc(f['等待']||'')}">${f['阻塞']?'⛔ 排队受阻':'⏳ 排队中'}</span></div>`;
+  if(f)return `<div style="margin-top:4px"><a data-bfx="${esc(b['编号'])}" title="${esc(f['说明']||'')}"><span class="badge ${f['状态']==='已修复'?'st-已完成':'st-已暂停2'}">${f['状态']==='已修复'?'✅ 已修复':'⚠ 未修成'}</span>${(f['提交']||[]).length?` <span class="mono small">${esc(f['提交'][0]['提交'].slice(0,8))}</span>`:''}</a></div>`;
+  return a&&a['状态']==='已通过'&&!a['过时']&&b['状态']!=='已关闭'?`<div style="margin-top:4px"><button class="small" data-bfix="${esc(b['编号'])}" title="加入修复队列：后台按审核通过的思路改代码、每个 Bug 单独提交，修好后在知识库标记（不改 Bug 平台）">🔧 修复</button></div>`:''}
+// 修复进度 / 排队 / 异常：放在 Bug 列表最上面；ids 给了就只看这些 Bug（期页面）
+function fixPanel(q,ids){
+  if(!q)return '';const keep=x=>!ids||ids.has(x['编号']);
+  const run=q['修复中'].filter(keep),wait=q['排队中'].filter(keep),block=q['阻塞'].filter(keep),fail=q['未完成'].filter(keep),warn=(q['警告']||[]).filter(w=>!ids||w.Bug.some(b=>ids.has(b)));
+  if(!run.length&&!wait.length&&!block.length&&!fail.length&&!warn.length)return '';
+  const t=x=>`<a href="${esc(x['链接'])}" target="_blank" rel="noopener" class="mono">${esc(x['编号'])}</a> ${esc(x['标题'].length>40?x['标题'].slice(0,40)+'…':x['标题'])}`;
+  const mins=s=>{const d=(Date.now()-new Date(s.replace(' ','T')))/60000;return d>=0&&d<1e5?Math.round(d):''};
+  const rows=[];
+  if(run.length){const ss={};run.forEach(x=>(ss[x['会话']]=ss[x['会话']]||[]).push(x));
+    Object.values(ss).forEach(g=>rows.push(`<div style="margin:4px 0"><span class="badge st-开发中">🔧 修复中</span> ${g.map(t).join('；')}
+      <span class="small mut">· ${esc(g[0]['开始时间'])} 开始，已 ${mins(g[0]['开始时间'])} 分钟 · <span class="mono">${esc((g[0]['仓库']||'').replace(/^\/Users\/[^/]+/,'~'))}</span> ${esc(g[0]['分支']||'')}</span>
+      ${(g[0]['动作']||[]).length?`<div class="small mut mono" style="margin:2px 0 0 18px;white-space:pre-wrap">${g[0]['动作'].map(a=>'› '+esc(a)).join('\n')}</div>`:''}</div>`))}
+  const byWhy={};block.forEach(x=>(byWhy[x['原因']]=byWhy[x['原因']]||[]).push(x));       // 同一个原因合成一条
+  Object.entries(byWhy).forEach(([why,g])=>rows.push(`<div style="margin:4px 0"><span class="badge st-已暂停2">⛔ 需要你处理</span> ${g.map(x=>`${t(x)} <a class="small" data-bunq="${esc(x['编号'])}" title="移出修复队列">移出</a>`).join('；')}<div class="small" style="color:var(--s4);margin-left:18px">${esc(why)}</div></div>`));
+  if(wait.length)rows.push(`<div style="margin:4px 0"><span class="badge st-已批准开发">⏳ 排队 ${wait.length}</span> ${wait.map(x=>`${t(x)} <a class="small" data-bunq="${esc(x['编号'])}">移出</a>`).join('；')}${wait[0]['原因']?`<div class="small mut" style="margin-left:18px">${esc(wait[0]['原因'])}，结束后按顺序接着修</div>`:''}</div>`);
+  const failRow=x=>`<div style="margin:4px 0"><span class="badge st-已暂停2">⚠ 没修成</span> ${t(x)} <span class="small mut">${esc(x['时间']||'')}</span>
+    <div class="small" style="margin-left:18px;white-space:pre-wrap;max-height:4.5em;overflow:hidden" title="${esc(x['原因']||'')}">${esc(x['原因']||'')}</div>
+    <div style="margin-left:18px" class="row small"><a data-bfix="${esc(x['编号'])}">重新修复</a><a data-bfx="${esc(x['编号'])}">详情 / 撤销标记</a></div></div>`;
+  fail.slice(0,3).forEach(x=>rows.push(failRow(x)));
+  if(fail.length>3)rows.push(`<details><summary class="small mut">还有 ${fail.length-3} 条没修成</summary>${fail.slice(3).map(failRow).join('')}</details>`);
+  warn.forEach(w=>rows.push(`<div style="margin:4px 0"><span class="badge st-已暂停2">⚠ 会话警告</span> Bug ${esc(w.Bug.join('、'))}：${esc(w['警告'])}</div>`));
+  return `<div class="card2" style="margin-bottom:10px;border-color:${block.length||fail.length?'var(--s4)':'var(--line)'}"><div class="bd"><b class="small">修复进度</b>${rows.join('')}</div></div>`}
+function fixDlg(b){const f=b['修复'];
+  openDlg(`Bug ${b['编号']} 修复（知识库标记）`,`<div class="form"><p><b>${esc(b['标题'])}</b></p>
+    <p><span class="badge ${f['状态']==='已修复'?'st-已完成':'st-已暂停2'}">${esc(f['状态'])}</span> <span class="small mut">${esc(f['时间']||'')} · ${esc(f['标记']||'')}</span></p>
+    ${(f['提交']||[]).map(c=>`<div class="mono small">${esc(c['提交'])} ${esc(c['说明'])}</div>`).join('')}
+    ${f['说明']?`<div style="white-space:pre-wrap">${esc(f['说明'])}</div>`:''}
+    <p class="mut small">只记在知识库里，不改 Bug 平台；平台上的状态由测试 / 你自己去改。</p>
+    <div class="row">${f['状态']!=='已修复'&&b['分析']&&b['分析']['状态']==='已通过'?'<button class="pri" id="fxAgain">🔧 重新修复</button>':''}<button id="fxUndo">撤销标记</button></div></div>`);
+  if($('#fxAgain'))$('#fxAgain').onclick=()=>{dlg.close();fixBugs([b['编号']])};
+  $('#fxUndo').onclick=async()=>{try{const r=await post('/api/zentao/unfix',{id:b['编号']});toast(r.msg);dlg.close();render()}catch(e){toast(e.message)}}}
+async function fixBugs(ids){     // 点「修复」就是批准：直接进修复队列，进度和异常显示在列表顶部
+  try{const r=await post('/api/zentao/fix',{ids});toast(r.msg.split('\n')[0]);if(dlg.open)dlg.close();render()}catch(e){toast(e.message)}}
+let bugIndex={};
+// Bug 列表默认只显示 编号、标题、状态、分析 / 修复；其他信息勾选后显示（记在本机浏览器）
+const BUG_COLS=[['简介','简介'],['详情','产品 / 执行·Sprint / 指派 / Jenkins'],['严重','严重 / 平台 / 线上'],['归属','归属（可改）']];
+let bugCols=[];try{bugCols=JSON.parse(localStorage.getItem('kb.bugCols')||'[]')}catch(_){}
+function bugTable(bugs,ps,st){
+  bugs.forEach(b=>bugIndex[b['编号']]=b);
+  const list=bugs.filter(b=>st==='全部'||b['状态']!=='已关闭').sort(BUG_SORTS[bugSort]||BUG_SORTS['状态']);
+  if(!list.length)return `<p class="mut">${bugs.length?'没有未关闭的 Bug。':'还没有 Bug。'}</p>`;
+  const todo=list.filter(b=>!b['分析']&&!b['分析中']&&b['状态']==='激活').map(b=>b['编号']);   // 只批量分析激活的
+  const fixable=list.filter(b=>b['分析']&&b['分析']['状态']==='已通过'&&!b['分析']['过时']&&!b['修复']&&b['状态']!=='已关闭').map(b=>b['编号']);
+  const th=(k,t,w)=>`<th${w?` style="width:${w}px"`:''}><a data-bsort="${k}" title="按${k}排序">${t}${bugSort===k?' ▾':''}</a></th>`;
+  const on=k=>bugCols.includes(k),multi=new Set(bugs.map(b=>b['来源'])).size>1;
+  return `<div class="row small mut" style="margin-bottom:6px;gap:10px;flex-wrap:wrap">排序 ${Object.keys(BUG_SORTS).map(k=>`<a data-bsort="${k}" ${bugSort===k?'style="font-weight:600;color:var(--fg)"':''}>${k}</a>`).join(' · ')}
+    <span style="margin-left:12px">显示</span>${BUG_COLS.map(([k,t])=>`<label class="row" style="gap:3px;color:var(--fg)"><input type="checkbox" data-bcol="${k}" ${on(k)?'checked':''}>${t}</label>`).join('')}
+    <span style="margin-left:auto"></span>${todo.length?`<button class="small" data-banall="${esc(todo.join(','))}">🔍 分析未分析的激活 Bug（${todo.length}）</button>`:''}
+    ${fixable.length?`<button class="small" data-bfixall="${esc(fixable.join(','))}">🔧 修复审核通过的（${fixable.length}）</button>`:''}</div>
+  <div class="tw"><table><tr><th>Bug</th>${th('状态','状态',on('严重')?120:80)}${th('分析','分析 / 修复',240)}${on('归属')?'<th style="width:230px">归属</th>':''}</tr>${list.map(b=>`<tr>
+    <td><a href="${esc(b['链接'])}" target="_blank" rel="noopener" class="mono small" title="在${esc(b['来源']||'平台')}打开原页">${esc(b['编号'])}</a>${multi?` <span class="badge" style="font-size:11px">${esc(b['来源']||'')}</span>`:''} <b>${esc(b['标题'])}</b>${on('简介')&&b['简介']?`<div class="small">${esc(b['简介'])}</div>`:''}
+      ${on('详情')?`<div class="mut small">${esc(b['产品']||'')}${(b['分组']||[]).filter(g=>g['名']).map(g=>' · '+esc(g['类型']+' '+g['名'])).join('')}${b['指派给']?' · 指派 '+esc(b['指派给']):''} · 平台上修改 ${esc(b['修改时间']||'')}${b['Jenkins任务']?` · <span class="mono" title="Jenkins 任务">${esc(b['Jenkins任务'])}</span>`:''}</div>`:''}
+      ${!on('归属')&&b['归属']&&b['归属']['类型']!=='待归纳'&&b['归属']['名称']&&!curPeriod()?`<div class="mut small">→ ${esc(b['归属']['名称'])}</div>`:''}</td>
+    <td><span class="badge ${BUG_ST[b['状态']]||''}">${esc(b['状态'])}</span>${on('严重')?` <span class="small mut">严重${esc(b['严重'])}</span>${b['线上']?' <span class="badge st-已暂停2">线上</span>':''}${b['平台']?` <span class="small mut">${esc(b['平台'])}</span>`:''}`:''}</td>
+    <td>${anCell(b)}${fixCell(b)}</td>
+    ${on('归属')?`<td>${ownerSel(b,ps)}</td>`:''}</tr>`).join('')}</table></div>`}
+async function analyze(ids,repo){
+  try{const r=await post('/api/zentao/analyze',repo?{ids,repo}:{ids});toast(r.msg.split('\n')[0]);render()}
+  catch(e){if(!e.need)return toast(e.message);const n=e.need;
+    openDlg('选择分析用的代码仓库',`<div class="form"><p class="small">${esc(e.message)}</p>
+      ${n['候选'].map((p,i)=>`<label class="row" style="color:var(--fg)"><input type="radio" name="anR" value="${esc(p)}" ${i?'':'checked'}> <span class="mono small">${esc(p)}</span></label>`).join('')}
+      <label class="row" style="color:var(--fg)"><input type="radio" name="anR" value="*" ${n['候选'].length?'':'checked'}> 其他路径 <input type="text" id="anP" style="width:380px" placeholder="/Users/…/代码仓库根目录"></label>
+      <p class="mut small">会记住「${esc(n['产品']||'这个产品')}」用这个仓库，下次不再问。</p>
+      <div class="row"><button class="pri" id="anGo">开始分析</button></div></div>`);
+    $('#anGo').onclick=()=>{const v=document.querySelector('[name=anR]:checked').value;const p=v==='*'?$('#anP').value.trim():v;if(!p)return toast('请选择或填写仓库路径');dlg.close();analyze(ids,p)}}}
+// 标记已修复：一个居中小弹框，提交号和说明都可空（叠在分析弹框上，取消回到分析弹框）
+function fixedDlg(id){
+  const d=document.createElement('dialog');d.className='mini';
+  d.innerHTML=`<div class="hd"><b>标记 Bug ${esc(id)} 已修复</b><button data-x>取消</button></div><div class="bd">
+    <p class="small mut" style="margin:0 0 10px">你自己已经修好了：只在知识库标记，不改 Bug 平台。两项都可以不填。</p>
+    <label class="small">提交号（多个用空格隔开）</label><input type="text" id="fdC" style="width:100%;margin:4px 0 10px" placeholder="如 abc1234 def5678">
+    <label class="small">说明</label><textarea id="fdN" rows="3" style="width:100%;margin-top:4px" placeholder="改了什么、怎么验证的"></textarea>
+    <div class="row" style="justify-content:flex-end;margin-top:12px;gap:8px"><button data-x>取消</button><button class="pri" id="fdOk">标记已修复</button></div></div>`;
+  document.body.appendChild(d);d.addEventListener('close',()=>d.remove());
+  d.querySelectorAll('[data-x]').forEach(b=>b.onclick=()=>d.close());
+  const ok=d.querySelector('#fdOk');
+  ok.onclick=async()=>{const c=d.querySelector('#fdC').value.trim(),n=d.querySelector('#fdN').value.trim();ok.disabled=true;
+    try{const m=await post('/api/zentao/fixed',{id,done:true,commits:c?c.split(/\s+/):[],note:n});toast(m.msg);d.close();dlg.close();render()}
+    catch(e){toast(e.message);ok.disabled=false}};
+  d.showModal();d.querySelector('#fdC').focus();
+}
+async function analysisDlg(id){
+  const r=await api('/api/zentao/analysis?id='+enc(id)),a=r.analysis,b=r.bug;
+  const sec=(t,v)=>v?`<h3 style="margin:12px 0 4px">${t}</h3><div style="white-space:pre-wrap">${esc(v)}</div>`:'';
+  const f=b['修复'], fixing=f&&['修复中','排队中'].includes(f['状态']);
+  const noFix=b['状态']==='已关闭'?'平台上已关闭':a['过时']?'分析之后平台上又改过，先重新分析':fixing?(f['状态']==='排队中'?'已在修复队列':'正在修复'):'';
+  openDlg(`Bug ${b['编号']} 分析`,`<div style="max-width:900px">
+    <div style="position:sticky;top:-12px;z-index:2;background:var(--card);margin:-12px -14px 10px;padding:10px 14px;border-bottom:1px solid var(--line)">
+      <div class="row" style="gap:8px;flex-wrap:wrap"><button class="pri" id="rvFix" ${noFix?`disabled title="${esc(noFix)}"`:'title="按这份分析的修复思路改代码：后台修复会话，每个 Bug 单独提交（不 push），只在知识库标记"'}>🔧 ${f&&!fixing?'重新修复':'修复'}</button>
+        <button id="rvRe" title="打回，并带着意见立即重新分析">打回并重新分析</button>
+        ${noFix?`<span class="small mut">${esc(noFix)}</span>`:''}
+        <button id="rvFixed" style="margin-left:auto" title="你自己已经修好了：在知识库里标记（不改 Bug 平台）">标记已修复…</button></div>
+      <textarea id="rvN" rows="1" style="width:100%;margin-top:8px" placeholder="意见（打回必填：哪里不对、希望往哪个方向查；修复时也会带给修复会话）">${esc(a['状态']==='需重分析'?a['意见']||'':'')}</textarea></div>
+    <div class="row" style="flex-wrap:wrap;gap:6px"><span class="badge ${AN_ST[a['状态']]||''}">${esc(a['状态'])}</span><span class="small mut">置信度 ${esc(a['置信度']||'?')} · ${esc(a['时间'])} · ${esc(a['提交者']||'')} · 依据平台上修改 ${esc(a['修改时间']||a['禅道修改']||'')}</span>
+      ${a['过时']?'<span class="badge st-已暂停2">⚠ 分析之后平台上又改过，可能过时</span>':''}<a href="${esc(b['链接'])}" target="_blank" rel="noopener" class="small" style="margin-left:auto">${esc(b['来源']||'平台')}原页 ↗</a></div>
+    <p><b>${esc(b['标题'])}</b></p>
+    <p style="font-size:15px">结论：<b>${esc(a['摘要'])}</b></p>
+    <h3 style="margin:12px 0 4px">代码位置 <span class="small mut" style="font-weight:400">${esc(a['仓库']||'')}</span></h3>
+    ${(a['代码位置']||[]).map(x=>`<div style="margin:6px 0"><span class="mono small"><b>${esc(x['路径'])}:${x['行']}</b></span>${x['分支']?` <span class="small mut">（分支 ${esc(x['分支'])}）</span>`:''} <span class="small ${x['核对'].startsWith('⚠')?'':'mut'}" style="${x['核对'].startsWith('⚠')?'color:var(--s4)':''}">${esc(x['核对'])}</span>
+      <div class="small">${esc(x['说明'])}</div>${x['代码']?`<pre class="mono" style="font-size:12px;overflow:auto;max-height:240px;margin:4px 0">${esc(x['代码'])}</pre>`:''}</div>`).join('')||'<p class="mut">没有给出代码位置</p>'}
+    ${sec('原因',a['原因'])}${sec('修复思路',a['思路'])}${sec('影响范围',a['影响'])}${sec('自测要点',a['自测'])}${sec('还缺的信息',a['缺少'])}${sec('审核意见',a['意见'])}</div>`);
+  $('#rvFixed').onclick=()=>fixedDlg(id);
+  // 点「修复」= 认可这份分析并开始修：先记为通过（带上意见），再起修复会话
+  $('#rvFix').onclick=async()=>{const btn=$('#rvFix');btn.disabled=true;
+    try{if(a['状态']!=='已通过')await post('/api/zentao/review',{id,action:'通过',note:$('#rvN').value.trim()});
+      const r=await post('/api/zentao/fix',{ids:[id]});toast(r.msg.split('\n')[0]);dlg.close();render()}
+    catch(e){toast(e.message);btn.disabled=false;render()}};
+  $('#rvRe').onclick=async()=>{const note=$('#rvN').value.trim();if(!note){toast('打回要写意见：哪里不对、希望往哪个方向查');$('#rvN').focus();return}
+    try{const m=await post('/api/zentao/review',{id,action:'打回',note});toast(m.msg);dlg.close();analyze([id])}catch(e){toast(e.message)}};
+}
+function bindBugs(root){
+  root.querySelectorAll('[data-bsort]').forEach(a=>a.onclick=()=>{bugSort=a.dataset.bsort;try{localStorage.setItem('kb.bugSort',bugSort)}catch(_){}render()});
+  root.querySelectorAll('[data-ban]').forEach(b=>b.onclick=()=>analyze([b.dataset.ban]));
+  root.querySelectorAll('[data-banall]').forEach(b=>b.onclick=()=>{const ids=b.dataset.banall.split(',');if(ids.length>6&&!confirm(`分析 ${ids.length} 条会启动多个后台会话，确定？`))return;analyze(ids)});
+  root.querySelectorAll('[data-bcol]').forEach(c=>c.onchange=()=>{const k=c.dataset.bcol;bugCols=c.checked?[...new Set([...bugCols,k])]:bugCols.filter(x=>x!==k);
+    try{localStorage.setItem('kb.bugCols',JSON.stringify(bugCols))}catch(_){}render()});
+  root.querySelectorAll('[data-bfix]').forEach(b=>b.onclick=()=>fixBugs([b.dataset.bfix]));
+  root.querySelectorAll('[data-bunq]').forEach(a=>a.onclick=async()=>{try{const r=await post('/api/zentao/unfix',{id:a.dataset.bunq});toast(r.msg);render()}catch(e){toast(e.message)}});
+  root.querySelectorAll('[data-bfixall]').forEach(b=>b.onclick=()=>fixBugs(b.dataset.bfixall.split(',')));
+  root.querySelectorAll('[data-bfx]').forEach(a=>a.onclick=()=>fixDlg(bugIndex[a.dataset.bfx]));
+  root.querySelectorAll('[data-bav]').forEach(a=>a.onclick=()=>analysisDlg(a.dataset.bav).catch(e=>toast(e.message)));
+  root.querySelectorAll('[data-bown]').forEach(sel=>{const old=sel.value;sel.onchange=async()=>{
+  let t=sel.value;if(t==='__task'){const n=prompt('新建一个事项并把这个 Bug 归进去，事项名：（如：歌房进房 ANR）');if(!n||!n.trim()){sel.value=old;return}t='事项:'+n.trim()}
+  try{const r=await post('/api/zentao/assign',{id:sel.dataset.bown,target:t});toast(r.msg);render()}catch(e){toast(e.message);sel.value=old}}})}
+// 接入 / 修改一个 Bug 或崩溃平台：适配器（内置或「Bug平台」插件）+ 基础信息里的账号 + 平台特有选项
+function srcDlg(s,ents,c){
+  const ads=s['适配器'],isNew=!c;let ad=ads.find(a=>a['名称']===(c?c['适配器']:'')||a['插件']===(c&&c['适配器']))||ads[0];
+  const optsHtml=a=>(a['选项']||[]).map(o=>`<label>${esc(o['名'])}${o['说明']?` <span class="mut small">${esc(o['说明'])}</span>`:''}<input type="text" data-sopt="${esc(o['名'])}" value="${esc(((c&&c['选项'])||{})[o['名']]??'')}" placeholder="${esc(o['默认']||'')}"></label>`).join('');
+  const body=()=>`<div class="form" style="max-width:640px">
+    ${isNew?`<label>平台类型<select id="sAd">${ads.map(a=>`<option value="${esc(a['插件']||a['名称'])}" ${a===ad?'selected':''}>${esc(a['名称'])}（${a['类型']==='崩溃'?'崩溃 → ANR 页':'缺陷 → Bug 页'}${a['插件']?'，插件':''}）</option>`).join('')}</select></label>
+      <label>名称 <span class="mut small">自己起，如 jira、sentry；平台编号是纯数字时会加上它作前缀</span><input type="text" id="sId" value="${esc(ad['名称'].split(' ')[0].toLowerCase()==='禅道'?'禅道':ad['名称'].split(' ')[0].toLowerCase())}"></label>`:`<p><b>${esc(c.ID)}</b> <span class="mut small">${esc(c['适配器'])}</span></p>`}
+    <label>账号（基础信息条目）<span class="mut small" id="sNeed">需要：${esc(ad['账号字段']||'')}</span>
+      <select id="sEnt"><option value="">自动找（名称里带平台名的那条）</option>${ents.map(e=>`<option value="${esc(e['编号'])}" ${c&&c['账号条目']===e['编号']?'selected':''}>${esc(e['编号']+' '+e['名称'])}</option>`).join('')}</select></label>
+    <div id="sOpts">${optsHtml(ad)}</div>
+    ${c?`<label class="row" style="gap:6px;display:flex;align-items:center"><input type="checkbox" id="sOn" style="width:auto;margin:0" ${c['启用']?'checked':''}> 启用（停用后不再同步，已有索引保留）</label>`:''}
+    <p class="mut small">只读：知识库只从平台拉数据，从不回写。密码 / 令牌存在基础信息的机密字段里（钥匙串）。</p>
+    <div class="row" style="gap:8px"><button class="pri" id="sSave">${isNew?'接入并同步':'保存'}</button>${c?'<button id="sTest">测试连接</button><button id="sDel" style="margin-left:auto">移除这个平台</button>':''}</div>
+    <pre id="sOut" class="small" style="margin-top:8px"></pre></div>`;
+  openDlg(isNew?'接入 Bug / 崩溃平台':`平台：${c.ID}`,body());
+  const bind=()=>{
+    if($('#sAd'))$('#sAd').onchange=()=>{ad=ads.find(a=>(a['插件']||a['名称'])===$('#sAd').value);$('#sOpts').innerHTML=optsHtml(ad);$('#sNeed').textContent='需要：'+(ad['账号字段']||'');
+      $('#sId').value=ad['名称'].split(' ')[0].toLowerCase()};
+    $('#sSave').onclick=async()=>{const opts={};document.querySelectorAll('[data-sopt]').forEach(i=>opts[i.dataset.sopt]=i.value.trim());
+      const id=c?c.ID:$('#sId').value.trim(),b={id,entry:$('#sEnt').value,options:opts};
+      if(isNew)b.adapter=ad['插件']||ad['名称'];if(c)b.enabled=$('#sOn').checked;
+      try{await post('/api/bug/source',b);$('#sOut').textContent='已保存，测试连接中…';
+        try{const t=await post('/api/bug/test',{id});$('#sOut').textContent=t.msg;await post('/api/zentao/sync',{source:id});toast('已保存，开始同步')}
+        catch(e){$('#sOut').textContent='已保存，但连接测试失败：\n'+e.message}
+        if(isNew)c={ID:id,'适配器':b.adapter,'启用':true};}catch(e){toast(e.message)}};
+    if($('#sTest'))$('#sTest').onclick=async()=>{$('#sOut').textContent='测试中…';try{$('#sOut').textContent=(await post('/api/bug/test',{id:c.ID})).msg}catch(e){$('#sOut').textContent=e.message}};
+    if($('#sDel'))$('#sDel').onclick=async()=>{if(!confirm(`移除平台「${c.ID}」？没分析过、没手动归类、没修复过的索引条目会去掉（平台上的数据不受影响）`))return;
+      try{const r=await post('/api/bug/source',{id:c.ID,remove:true});toast(r.msg);dlg.close();bugsPage()}catch(e){toast(e.message)}};
+  };bind();
+  dlg.addEventListener('close',()=>{if(location.hash.startsWith('#/bugs'))bugsPage()},{once:true});
+}
+async function bugsPage(){
+  const d=await api('/api/zentao');navRefresh();periodNames=d.periods;taskNames=d.tasks;const s=d.status;
+  const stOk=b=>bugF.st==='全部'||b['状态']!=='已关闭';
+  const OW=['待归纳','期','事项','未关联','全部'];
+  const cnt=o=>d.bugs.filter(b=>(o==='全部'||b['归属']['类型']===o)&&stOk(b)).length;
+  const q=bugF.q.trim().toLowerCase();
+  const list=d.bugs.filter(b=>(bugF.owner==='全部'||b['归属']['类型']===bugF.owner)&&(!q||JSON.stringify(b).toLowerCase().includes(q)));
+  const srcs=s['平台'],defects=srcs.filter(c=>c['类型']==='缺陷'),crashes=srcs.filter(c=>c['类型']==='崩溃');
+  const srcRow=c=>`<div class="row" style="flex-wrap:wrap;gap:10px;margin:4px 0">
+      <b>${esc(c.ID)}</b><span class="small mut">${esc(c['适配器'])}${c['启用']?'':' · 已停用'}</span>
+      ${c['类型']==='缺陷'?`<label class="small mut">范围 <select data-zscope="${esc(c.ID)}">${s['范围选项'].map(x=>`<option ${x===c['范围']?'selected':''}>${x}</option>`).join('')}</select></label>
+      <label class="small mut">平台 <select data-zpf="${esc(c.ID)}">${s['平台选项'].map(x=>`<option ${x===c['平台']?'selected':''}>${x}</option>`).join('')}</select></label>
+      <span class="small mut">未关闭 ${c['未关闭']}</span>`:`<a class="small" href="#/anr">→ 💥 ANR / 崩溃</a>`}
+      <span class="small mut">${esc(c['同步']||'还没同步')}</span><a class="small" data-zsrc="${esc(c.ID)}">设置…</a></div>`;
+  app.innerHTML=`${''}<div class="pagehead"><div><h1>🐞 Bug</h1><p class="mut">从 Bug 平台（禅道、Jira…）同步并自动归到期（按执行 / Sprint / 项目 / Jenkins 分支）；线上反馈、认不出的进「待归纳」，你来归。知识库只存链接和简介，原文以平台为准。崩溃平台（Sentry、Firebase、Bugly）同步到「💥 ANR / 崩溃」。</p></div>
+    <div class="row"><button id="zAdd">＋ 接入平台</button><button id="zSync" ${s['正在同步']||!srcs.length?'disabled':''}>${s['正在同步']?'同步中…':'⟳ 立即同步'}</button></div></div>
+  ${fixPanel(d.fixq)}
+  <div class="card2" style="margin-bottom:12px"><div class="bd">
+    ${srcs.length?srcs.map(srcRow).join(''):'<p class="mut" style="margin:0">还没接入 Bug 平台：先在「◈ 基础信息」存好账号，再点右上角「＋ 接入平台」。</p>'}
+    <div class="small mut" style="margin-top:4px">「我的」= 指派给我或由我解决 · 上次同步 ${esc(s['上次同步']||'从未')}${s['下次同步']?' · 下次 '+esc(s['下次同步']):''} · 每 ${s['间隔小时']>=1?s['间隔小时']+' 小时':Math.round(s['间隔小时']*60)+' 分钟'}自动同步 · 转给别人的会移除
+    ${s['结果']?`<div class="small" style="white-space:pre-wrap;color:var(--fg)">${esc(s['结果'])}</div>`:''}</div></div></div>
+  <div class="fchips">${OW.map(o=>`<button class="fchip ${o===bugF.owner?'on':''}" data-bo="${o}">${o}<b>${cnt(o)}</b></button>`).join('')}
+    <label class="small mut" style="margin-left:8px"><input type="checkbox" id="zAll" ${bugF.st==='全部'?'checked':''}> 含已关闭</label>
+    <input type="text" id="zQ" value="${esc(bugF.q)}" placeholder="筛选：标题、期名、执行…" style="margin-left:auto;width:220px"></div>
+  ${(d.sessions||[]).length?`<div class="card2" style="margin-bottom:10px"><div class="bd small">${d.sessions.map(x=>`<div>${x['状态']==='运行中'?(x['类型']==='修复'?'🔧 修复中':'● 分析中'):'⚠'} Bug ${esc(x.Bug.join('、'))} · ${esc(x['引擎']||'')} · <span class="mono">${esc(x['仓库'].replace(/^\/Users\/[^/]+/,'~'))}</span> · ${esc(x['开始时间'])}${x['警告']?` <b style="color:var(--s4)">${esc(x['警告'])}</b>`:''}</div>`).join('')}</div></div>`:''}
+  ${bugTable(list,d.periods,bugF.st)}`;
+  const save=()=>{try{localStorage.setItem('kb.bugF',JSON.stringify(bugF))}catch(_){}};
+  app.querySelectorAll('[data-bo]').forEach(b=>b.onclick=()=>{bugF.owner=b.dataset.bo;save();bugsPage()});
+  $('#zAll').onchange=()=>{bugF.st=$('#zAll').checked?'全部':'未关闭';save();bugsPage()};
+  $('#zQ').onchange=()=>{bugF.q=$('#zQ').value;save();bugsPage()};
+  bindBugs(app);
+  const setz=async b=>{try{await post('/api/bug/source',b);const r=await post('/api/zentao/sync',{source:b.id});toast('已保存，'+r.msg);bugsPage()}catch(e){toast(e.message);bugsPage()}};
+  app.querySelectorAll('[data-zpf]').forEach(x=>x.onchange=()=>setz({id:x.dataset.zpf,platform:x.value}));
+  app.querySelectorAll('[data-zscope]').forEach(x=>x.onchange=()=>{const c=srcs.find(y=>y.ID===x.dataset.zscope);
+    if(x.value==='指定人'){const p=prompt('同步哪些人的 Bug？填平台账号，多个用逗号隔开',(c['人员']||[]).join(','));if(!p){x.value=c['范围'];return}setz({id:c.ID,scope:'指定人',people:p});return}
+    setz({id:c.ID,scope:x.value})});
+  app.querySelectorAll('[data-zsrc]').forEach(a=>a.onclick=()=>srcDlg(s,d.baseEntries,srcs.find(c=>c.ID===a.dataset.zsrc)));
+  $('#zAdd').onclick=()=>srcDlg(s,d.baseEntries,null);
+  $('#zSync').onclick=async()=>{try{const r=await post('/api/zentao/sync',{});toast(r.msg);$('#zSync').disabled=true;$('#zSync').textContent='同步中…'}catch(e){toast(e.message)}};
+}
+
+let anrF={v:'待处理',q:''};try{anrF=Object.assign(anrF,JSON.parse(localStorage.getItem('kb.anrF')||'{}'))}catch(_){}
+const ANR_COLS=[['原因','原因'],['详情','类型 / 版本 / 首次 / 最近']];
+let anrCols=[];try{anrCols=JSON.parse(localStorage.getItem('kb.anrCols')||'[]')}catch(_){}
+const ANR_K={'ANR':'st-开发中','Java崩溃':'st-已暂停2','Native崩溃':'st-已暂停2'};
+let anrIndex={};
+async function anrPage(){
+  const d=await api('/api/anr');navRefresh();
+  d.problems.forEach(p=>anrIndex[p['编号']]=p);
+  const todo=p=>p['状态']!=='忽略'&&(!p['事项']||p['修复后又出现']);
+  const V={'待处理':todo,'已关联':p=>p['状态']!=='忽略'&&p['事项'],'忽略':p=>p['状态']==='忽略','全部':()=>true};
+  const q=anrF.q.trim().toLowerCase();
+  const list=d.problems.filter(V[anrF.v]||todo).filter(p=>!q||JSON.stringify(p).toLowerCase().includes(q));
+  const on=k=>anrCols.includes(k);
+  const taskOpts=p=>`<select data-alink="${p['编号']}"><option value="">— 未关联 —</option><option value="＋新建">＋ 新建事项</option>${d.tasks.map(t=>`<option ${t===p['事项']?'selected':''}>${esc(t)}</option>`).join('')}</select>`;
+  app.innerHTML=`<div class="pagehead"><div><h1>💥 ANR / 崩溃</h1><p class="mut">把 traces、tombstone、崩溃日志、Bugly 导出、bugreport.zip 拖进来：按关键堆栈合并成「问题」并累计次数；有对应版本的 mapping 时自动还原混淆。要处理的问题建成「ANR/崩溃」事项。接入了崩溃平台（Sentry、Firebase Crashlytics、Bugly，在「🐞 Bug → ＋ 接入平台」）的，问题会自动同步进来，次数取平台上的累计值。</p></div></div>
+  <div class="card2" style="margin-bottom:12px"><div class="bd">
+    <div class="row" style="flex-wrap:wrap;gap:10px;margin-bottom:8px"><label class="small mut">版本 <input type="text" id="arV" placeholder="日志里认不出时填，如 5.32.1" style="width:180px"></label>
+      <label class="small mut">来源 <input type="text" id="arS" placeholder="如 用户反馈 vv号 123 / Bugly" style="width:200px"></label></div>
+    <div class="drop" id="arDrop">拖日志文件到这里，或点击选择（可多选；zip 会取出 anr/、tombstones/ 和日志）</div><input type="file" id="arPick" multiple hidden>
+    <div class="row small mut" style="margin-top:8px;flex-wrap:wrap;gap:8px">mapping：${d.mappings.length?d.mappings.map(v=>`<span class="badge">${esc(v)}</span>`).join(' '):'还没有'}
+      <button class="small" id="arMap">＋ 归档 mapping.txt</button><input type="file" id="arMapPick" hidden><span>（按版本存，归档后会重算这个版本的样本）</span></div></div></div>
+  <div class="fchips">${Object.keys(V).map(k=>`<button class="fchip ${k===anrF.v?'on':''}" data-av="${k}">${k}<b>${d.problems.filter(V[k]).length}</b></button>`).join('')}
+    <input type="text" id="arQ" value="${esc(anrF.q)}" placeholder="筛选：类名、方法、原因…" style="margin-left:auto;width:220px"></div>
+  <div class="row small mut" style="margin-bottom:6px;gap:10px">显示${ANR_COLS.map(([k,t])=>`<label class="row" style="gap:3px;color:var(--fg)"><input type="checkbox" data-acol="${k}" ${on(k)?'checked':''}>${t}</label>`).join('')}</div>
+  ${list.length?`<div class="tw"><table><tr><th style="width:84px">编号</th><th>问题</th><th style="width:70px">次数</th><th style="width:240px">事项</th></tr>${list.map(p=>`<tr>
+    <td><a data-ashow="${p['编号']}" class="mono">${p['编号']}</a></td>
+    <td><a data-ashow="${p['编号']}"><b>${esc(p['标题'])}</b></a>${(p['平台']||[]).map(x=>` <a href="${esc(x['链接'])}" target="_blank" rel="noopener" class="badge" title="${esc(x['来源'])} 上累计 ${esc(x['次数'])} 次，影响 ${esc(x['用户数'])} 人">${esc(x['来源'])} ↗</a>`).join('')}${p['已还原']===false?' <span class="badge st-已暂停2" title="缺 mapping 或版本不明">未还原</span>':''}${p['状态']==='忽略'?' <span class="badge">忽略</span>':''}
+      ${on('原因')&&p['原因']?`<div class="small">${esc(p['原因'])}</div>`:''}
+      ${on('详情')?`<div class="mut small"><span class="badge ${ANR_K[p['类型']]||''}">${esc(p['类型'])}</span> 版本 ${esc(p['版本'].join('、')||'不明')} · 首次 ${esc(p['首次'].slice(0,16))} · 最近 ${esc(p['最近'].slice(0,16))}</div>`:''}</td>
+    <td><b>${p['次数']}</b>${p['样本数']!==p['次数']?`<div class="mut small">${p['样本数']} 份日志</div>`:''}</td>
+    <td>${p['事项']?`<a href="#/p/${enc(p['事项'])}">${esc(p['事项'])}</a> ${badge(p['事项状态'])}${p['修复后又出现']?`<div class="small" style="color:var(--s4)">⚠ 完成后又出现 ${p['修复后又出现']} 次</div>`:''}`:taskOpts(p)}</td></tr>`).join('')}</table></div>`
+    :`<p class="mut">${d.problems.length?'这里没有问题。':'还没有 ANR / 崩溃日志。'}</p>`}`;
+  const save=()=>{try{localStorage.setItem('kb.anrF',JSON.stringify(anrF))}catch(_){}};
+  app.querySelectorAll('[data-av]').forEach(b=>b.onclick=()=>{anrF.v=b.dataset.av;save();anrPage()});
+  $('#arQ').onchange=()=>{anrF.q=$('#arQ').value;save();anrPage()};
+  app.querySelectorAll('[data-acol]').forEach(c=>c.onchange=()=>{const k=c.dataset.acol;anrCols=c.checked?[...new Set([...anrCols,k])]:anrCols.filter(x=>x!==k);try{localStorage.setItem('kb.anrCols',JSON.stringify(anrCols))}catch(_){}anrPage()});
+  app.querySelectorAll('[data-ashow]').forEach(a=>a.onclick=()=>anrDlg(a.dataset.ashow,d.tasks));
+  app.querySelectorAll('[data-alink]').forEach(sel=>sel.onchange=()=>anrLink(sel.dataset.alink,{task:sel.value}));
+  const send=async(files,kind,ver)=>{for(const f of files){toast(`上传 ${f.name}…`);
+    try{const r=await api('/api/anr/upload',{method:'POST',headers:{'X-Kind':kind,'X-Version':enc(ver||''),'X-Source':enc($('#arS').value.trim()),'X-Filename':enc(f.name)},body:f});
+      openDlg(kind==='mapping'?'已归档 mapping':`已归档 ${f.name}`,`<pre style="white-space:pre-wrap">${esc(r.msg)}</pre>`)}catch(e){toast(e.message)}}
+    anrPage()};
+  const z=$('#arDrop'),pick=$('#arPick');
+  z.onclick=()=>pick.click();pick.onchange=()=>send([...pick.files],'log',$('#arV').value.trim());
+  z.ondragover=e=>{e.preventDefault();z.classList.add('over')};z.ondragleave=()=>z.classList.remove('over');
+  z.ondrop=e=>{e.preventDefault();z.classList.remove('over');send([...e.dataTransfer.files],'log',$('#arV').value.trim())};
+  $('#arMap').onclick=()=>{const v=prompt('这个 mapping.txt 对应的 App 版本号（如 5.32.1）：',$('#arV').value.trim());if(!v||!v.trim())return;
+    const mp=$('#arMapPick');mp.onchange=()=>send([...mp.files],'mapping',v.trim());mp.click()};
+}
+async function anrLink(id,b){
+  if(b.task==='＋新建'&&!confirm('新建一个「ANR/崩溃」事项，并把这个问题关联进去？'))return anrPage();
+  try{const r=await post('/api/anr/link',Object.assign({id},b));toast(r.msg);if(dlg.open)dlg.close();render()}catch(e){toast(e.message)}}
+function anrDlg(id,tasks){
+  const p=anrIndex[id];if(!p)return;
+  openDlg(`${p['类型']} ${p['编号']}`,`<div style="max-width:900px">
+    <p><b>${esc(p['标题'])}</b></p>
+    <div class="small mut">${p['次数']} 次（${p['样本数']} 份日志）· 版本 ${esc(p['版本'].join('、')||'不明')} · 首次 ${esc(p['首次'])} · 最近 ${esc(p['最近'])}</div>
+    ${p['原因']?`<p>原因：${esc(p['原因'])}</p>`:''}
+    ${p['已还原']===false?`<div class="notice"><span>堆栈是混淆的：${p['版本'].length?'这个版本还没有 mapping，在 ANR 页归档后自动还原。':'认不出版本，补上版本号后会用对应的 mapping 还原。'}</span>
+      <input type="text" id="adV" placeholder="版本号" style="width:120px"><button id="adVGo">补版本号</button></div>`:''}
+    <h3 style="margin:12px 0 4px">关键堆栈 <span class="small mut" style="font-weight:400">最近一次${p['已还原']?'，已用 mapping 还原':''}；完整内容看样本原文</span></h3>
+    <pre class="mono" style="font-size:12px;overflow:auto;max-height:360px">${esc(p['关键堆栈'].join('\n'))}</pre>
+    <h3 style="margin:12px 0 4px">样本</h3>
+    ${p['样本'].slice(0,20).map(s=>`<div class="small row" style="gap:8px"><a href="/file?path=${enc(s['路径'])}" target="_blank" class="mono">${esc(s['编号'])}</a><span>${esc(s['发生时间']||s['加入时间'])}</span><span class="mut">版本 ${esc(s['版本']||'不明')}${s['次数']>1?' ×'+s['次数']:''}${s['来源']?' · '+esc(s['来源']):''} · ${esc(s['原文件'])}</span><a data-adel="${esc(s['编号'])}" class="mut" style="margin-left:auto">删除</a></div>`).join('')}
+    <div class="form" style="margin-top:14px"><label class="small mut">事项 <select id="adT"><option value="">— 未关联 —</option><option value="＋新建">＋ 新建事项</option>${tasks.map(t=>`<option ${t===p['事项']?'selected':''}>${esc(t)}</option>`).join('')}</select></label>
+      <textarea id="adN" rows="2" placeholder="备注（如：系统问题、已知原因）">${esc(p['备注']||'')}</textarea>
+      <div class="row"><button class="pri" id="adGo">保存</button><button id="adIgn">${p['状态']==='忽略'?'取消忽略':'忽略'}</button>${p['事项']?`<a href="#/p/${enc(p['事项'])}" onclick="dlg.close()" style="margin-left:auto">打开事项 →</a>`:''}</div></div></div>`);
+  $('#adGo').onclick=()=>{const b={note:$('#adN').value.trim()};if($('#adT').value!==(p['事项']||''))b.task=$('#adT').value;anrLink(id,b)};
+  $('#adIgn').onclick=()=>anrLink(id,{status:p['状态']==='忽略'?'':'忽略'});
+  if($('#adVGo'))$('#adVGo').onclick=()=>{const v=$('#adV').value.trim();if(v)anrLink(id,{version:v})};
+  $('#dlgB').querySelectorAll('[data-adel]').forEach(a=>a.onclick=async()=>{if(!confirm('删除这份样本（不是这个问题的日志）？'))return;
+    try{const r=await post('/api/anr/delete',{sample:a.dataset.adel});toast(r.msg);dlg.close();render()}catch(e){toast(e.message)}});
+}
+
 async function period(name){
   const d=await api('/api/period?name='+enc(name)), m=d.meta;
+  if(!periodNames.length){try{sideNav(await api('/api/overview'))}catch(_){}}
+  const isTask=m['类型']==='事项';
+  if(isTask&&(m['外部来源']||[]).length&&!fullView[d.name])return pushPage(d);
   const hist=m['状态历史']||[];
   const lastAt=s=>{for(let i=hist.length-1;i>=0;i--)if(hist[i]['状态']===s)return hist[i]['时间'];return''};
   const flow=['收集中','已批准开发','开发中','已完成'], ci=flow.indexOf(m['状态']);
@@ -352,7 +723,8 @@ async function period(name){
   const hasDesign=d.materials['设计图'].some(f=>f.isImage||(f.isDir&&f.images&&f.images.length));
   const missing=d.cats.filter(c=>c!=='其他资料'&&c!=='设计图'&&!d.materials[c].length&&!d.notes[c].length).concat(hasDesign?[]:['设计稿（Figma / 蓝湖）']);
   let notice='';
-  if(m['状态']==='收集中')notice=`<div class="notice">${missing.length?`<span>还缺：<b>${missing.join('、')}</b>。</span>`:'<span>材料看起来齐了。</span>'}
+  if(m['状态']==='收集中'&&isTask)notice=`<div class="notice"><span>把现象、日志 / traces、截图、用户反馈拖进「资料」，或在 🐞 Bug 页把相关 Bug 归进来；准备好后在「开发」里点「开始开发」（按轻量流程：定位 → 确认改法 → 修改自测 → 写结论）。</span></div>`;
+  else if(m['状态']==='收集中')notice=`<div class="notice">${missing.length?`<span>还缺：<b>${missing.join('、')}</b>。</span>`:'<span>材料看起来齐了。</span>'}
      <span>确认后点下方「开始开发」，或在终端运行</span><code id="apc">kb approve "${esc(d.name)}"</code><button onclick="navigator.clipboard.writeText(document.getElementById('apc').textContent);toast('已复制')">复制</button><span class="mut small">（批准只能本人操作）</span></div>`;
   if(m['状态']==='已暂停')notice=`<div class="notice">已暂停。</div>`;
   const catBox=c=>{
@@ -366,33 +738,38 @@ async function period(name){
       ${others.length?`<ul class="files">${others.map(f=>`<li><a data-read="${esc(f.path)}" data-dir="${f.isDir?1:''}">${esc(f.name)}${f.isDir?`/ <span class="mut small">${f.count} 个文件</span>`:''}</a><span class="mut small">${f.isDir?'':size(f.size)+' · '}${when(f.mtime)}</span></li>`).join('')}</ul>`:''}
       ${dirImgs.map(f=>`<details ${c==='设计图'?'open':''} style="margin-top:8px"><summary class="small"><b>${esc(f.name)}/</b> <span class="mut">${f.images.length} 张${f.name==='原型图'?' · 原型图/参考图，仅供理解交互，UI 以设计稿为准':c==='设计图'?' · 设计稿':''}</span></summary>
         <div class="grid" style="margin-top:6px">${f.images.map(p=>`<div class="thumb" data-img="${esc(p)}" data-note="${esc((f.notes||{})[p]||'')}"><img loading="lazy" src="${fileUrl(p)}"><div title="${esc((f.notes||{})[p]||'')}">${esc(p.split('/').pop())}</div></div>`).join('')}</div></details>`).join('')}
-      ${c==='设计图'&&!imgs.length&&!dirImgs.length?'<div class="small" style="color:var(--warn);margin-top:6px">还没有设计稿：把需求表里「设计稿地址」（Figma / 蓝湖）发给 Claude 导入，或把导出的画板拖进来</div>':''}
+      ${c==='设计图'&&!isTask&&!imgs.length&&!dirImgs.length?'<div class="small" style="color:var(--warn);margin-top:6px">还没有设计稿：把需求表里「设计稿地址」（Figma / 蓝湖）发给 Claude 导入，或把导出的画板拖进来</div>':''}
       ${!items.length&&!ns.length?'<div class="mut small">暂无</div>':''}
       <div class="drop" data-cat="${esc(c)}">拖文件 / 链接 / 文字到这里，或点击选择文件</div></div></div>`;
   };
   const tabs=[['dev','开发',(m['待确认']||[]).filter(q=>q['状态']==='待回答').length+((m['非阻断问题']||[]).filter(q=>q['状态']==='待处理').length)],
     ['mat','资料',d.cats.reduce((a,c)=>a+d.materials[c].length+d.notes[c].length,0)],
+    ['bug','Bug',(d.bugs||[]).filter(b=>b['状态']!=='已关闭').length],
     ['log','记录',d.log.length]];
   let tab=(ptabs[d.name]==='src'?'mat':ptabs[d.name])||(m['开发会话']||['已批准开发','开发中','已完成'].includes(m['状态'])?'dev':'mat');
   const branches=Object.values(d.notes).flat().filter(n=>n['类型']==='分支');
   const pend=(m['来源']||[]).filter(x=>x['核对']!=='已核对').length;
-  app.innerHTML=`<div class="pagehead"><div style="min-width:0"><div class="crumb"><a href="#/">总览</a> / 期</div>
-      <h1>${esc(d.name)} ${badge(m['状态'])}</h1><div class="mut">${esc(m['说明']||'')}</div>
+  app.innerHTML=`<div class="pagehead"><div style="min-width:0"><div class="crumb"><a href="#/">总览</a> / ${isTask?'事项':'期'}${(m['外部来源']||[]).length?' · <a id="toPush">← 回到原始内容</a>':''}</div>
+      <h1>${esc(d.name)} ${badge(m['状态'])}${isTask?` <span class="badge st-收集中">${esc(m['事项类型']||'其他')}</span> <span class="badge ${PRI_C[m['优先级']]||''}">优先级 ${esc(m['优先级']||'中')}</span>`:''}</h1><div class="mut">${esc(m['说明']||'')}${isTask&&m['来自']?`　<span class="small">来自：${esc(m['来自'])}</span>`:''}${isTask?` <a class="small" id="tkEdit">✎ 编辑</a>`:''}</div>
       <div class="pmeta">${branches.length?`<span>🌿 开发分支 ${branches.map(n=>`<b class="mono">${esc(noteTitle(n))}</b>`).join('；')}</span>`:''}
         ${m['开发仓库']?`<span>仓库 <span class="mono">${esc(m['开发仓库'].replace(/^\/Users\/[^/]+/,'~'))}</span></span>`:''}
         <span>关联仓库 ${esc((m['关联仓库']||[]).join('、')||'无')}</span><span class="mono" title="这一期的资料目录">${esc(d.dir.replace(/^\/Users\/[^/]+/,'~'))}</span></div></div>
-    <div class="row"><label class="small mut" for="stSel">状态</label><select id="stSel">${[...new Set([m['状态'],'收集中','开发中','已完成','已暂停'])].map(s=>`<option ${s===m['状态']?'selected':''}>${s}</option>`).join('')}</select><button id="fixLink" title="设计稿、文档地址给错了：所有地方一起换成正确链接">✎ 更正链接</button></div></div>
+    <div class="row"><label class="small mut" for="stSel">状态</label><select id="stSel">${[...new Set([m['状态'],'收集中','开发中','已完成','已暂停'])].map(s=>`<option ${s===m['状态']?'selected':''}>${s}</option>`).join('')}</select><button id="fixLink" title="设计稿、文档地址给错了：所有地方一起换成正确链接">✎ 更正链接</button><button class="danger" id="delP" title="没用的${isTask?'事项':'期'}：从知识库里整个删掉">🗑 删除</button></div></div>
     <div class="steps">${steps}</div>${notice}
     <nav class="ptabs">${tabs.map(([k,t,n])=>`<a class="ptab ${k===tab?'on':''}" data-tab="${k}">${t}${n?`<span class="n${k==='dev'&&n?' w':''}">${n}</span>`:''}${k==='mat'&&pend?`<span class="n w" title="来源核对">${pend} 待核对</span>`:''}</a>`).join('')}</nav>
     <div data-pane="dev" ${tab==='dev'?'':'hidden'}><div class="dev" id="devBox">${devCache.name===d.name?devCache.html:'<span class="mut">开发面板加载中…</span>'}</div></div>
     <div data-pane="mat" ${tab==='mat'?'':'hidden'}>${(m['来源']||[]).length?`<details class="cat" id="srcSec" ${pend||(m['来源']||[]).some(x=>x['待更新'])?'open':''}><summary class="hd" style="cursor:pointer"><b>来源核对 <span class="mut">(${(m['来源']||[]).length})</span> <span class="mut small" style="font-weight:400">从网址导入的资料，逐条和原网页核对</span></b>${pend?`<span class="badge st-已暂停">${pend} 待核对</span>`:'<span class="badge st-已完成">全部已核对</span>'}</summary><div class="bd">${srcBox(d)}</div></details>`:''}
       <div class="matgrid">${d.cats.map(catBox).join('')}</div></div>
+    <div data-pane="bug" ${tab==='bug'?'':'hidden'}><div class="card2"><div class="bd">
+      <p class="mut small" style="margin-top:0">Bug 平台上归到这里的 Bug（按执行 / Sprint / Jenkins 分支自动归，也可手动改归属）。知识库只存链接和简介；「分析」由后台 AI 只读完成（实时拉取原文和截图 → 对照本期分支改动和代码），结论等你审核。<a href="#/bugs">全部 Bug →</a></p>
+      ${fixPanel(d.fixq,new Set((d.bugs||[]).map(b=>b['编号'])))}${bugTable(d.bugs||[],kbPeriods(d),'未关闭')}</div></div></div>
     <div data-pane="log" ${tab==='log'?'':'hidden'}><div class="card2"><div class="bd">
       <div class="row" style="margin-bottom:8px"><input type="text" id="logIn" placeholder="追加一条记录…"><button id="logGo">记录</button></div>
       <div class="tl">${d.log.slice().reverse().map(l=>`<div class="it"><div class="mut small">${esc(l.time)}</div><span class="a">${esc(l.action)}</span>　${esc(l.content)}</div>`).join('')||'<span class="mut">暂无</span>'}</div></div></div></div>`;
   app.querySelectorAll('[data-tab]').forEach(a=>a.onclick=()=>{ptabs[d.name]=a.dataset.tab;try{localStorage.setItem('kb.ptabs',JSON.stringify(ptabs))}catch(_){}
     app.querySelectorAll('[data-tab]').forEach(x=>x.classList.toggle('on',x===a));app.querySelectorAll('[data-pane]').forEach(x=>x.hidden=x.dataset.pane!==a.dataset.tab)});
   devBox(d.name);
+  bindBugs(app);
   app.querySelectorAll('[data-read]').forEach(a=>a.onclick=()=>a.dataset.dir?toast('目录：请在 Finder 或让 Claude 查看'):readFile(a.dataset.read));
   app.querySelectorAll('[data-img]').forEach(a=>a.onclick=()=>showImg(a.dataset.img,d));
   app.querySelectorAll('[data-hist]').forEach(a=>a.onclick=()=>{const c=a.dataset.hist;openDlg(c+' · 历史版本',`<ul class="files">${d.history[c].map(f=>`<li><a onclick="readFile('${esc(f.path).replace(/'/g,"\\'")}')">${esc(f.name)}</a><span class="mut small">${when(f.mtime)}</span></li>`).join('')}</ul>`)});
@@ -414,6 +791,11 @@ async function period(name){
   if($('#srcClaude'))$('#srcClaude').onclick=async()=>{try{const r=await post('/api/refresh/claude',{period:d.name});toast(r.msg);render()}catch(e){toast(e.message)}};
   $('#logGo').onclick=async()=>{const v=$('#logIn').value.trim();if(!v)return;try{await post('/api/log',{period:d.name,note:v});render()}catch(e){toast(e.message)}};
   $('#fixLink').onclick=()=>fixLinkDlg(d);
+  if($('#toPush'))$('#toPush').onclick=()=>{delete fullView[d.name];render()};
+  $('#delP').onclick=()=>delPeriod(d.name,isTask);
+  if($('#tkEdit'))$('#tkEdit').onclick=()=>{openDlg('编辑事项',`<div class="form">${taskForm({edit:1,name:d.name,kind:m['事项类型'],priority:m['优先级'],from:m['来自'],summary:m['说明'],kinds:d.taskKinds,pris:d.taskPri})}
+      <div class="row"><button class="pri" id="tkGo">保存</button></div></div>`);
+    $('#tkGo').onclick=async()=>{try{const r=await post('/api/task/meta',{period:d.name,kind:$('#tkK').value,priority:$('#tkP').value,source:$('#tkF').value.trim(),summary:$('#tkS').value.trim()});toast(r.msg);dlg.close();render()}catch(e){toast(e.message)}}};
   $('#stSel').title='选另一个状态会先确认再修改';
   $('#stSel').onchange=async()=>{const sel=$('#stSel'),to=sel.value;
     if(!confirm(`把「${d.name}」的状态从「${m['状态']}」改为「${to}」？`)){sel.value=m['状态'];return}
@@ -539,19 +921,24 @@ const addRec=x=>{const run=x['状态']==='运行中';
 async function addList(){const b=$('#adList');if(!b)return;
   try{const xs=(await api('/api/adds')).items;b.innerHTML=xs.map(addRec).join('')||'<p class="mut small">还没有记录</p>'}catch(e){b.textContent=e.message}}
 async function addDlg(tab){
-  let ps=[];try{ps=(await api('/api/overview')).periods.map(p=>p.name)}catch(_){}
+  let ps=[],ov={};try{ov=await api('/api/overview');ps=ov.periods.map(p=>p.name)}catch(_){}
   const cur=curPeriod();
-  openDlg('添加',`<div class="row" style="margin-bottom:10px;gap:6px"><button id="tabAdd">✨ 模糊添加</button><button id="tabNew">＋ 新建一期</button></div>
+  openDlg('添加',`<div class="row" style="margin-bottom:10px;gap:6px"><button id="tabAdd">✨ 模糊添加</button><button id="tabNew">＋ 新建一期</button><button id="tabTask">＋ 新建事项</button></div>
+    <div id="paneTask" class="form" style="display:none">${taskForm({kinds:ov.taskKinds||[],pris:ov.taskPri||['高','中','低']})}
+      <div class="row"><button class="pri" id="tkGo">创建</button><span class="mut small">事项 = 不是产品需求、但要推动的工作；开始处理同样要你批准</span></div></div>
     <div id="paneNew" style="display:none;gap:8px"><input type="text" id="nN" placeholder="期名，如 2026-11-签到活动v2"><textarea id="nS" rows="3" placeholder="简介（可空）"></textarea>
       <div class="row"><button class="pri" id="nGo">创建</button><span class="mut small">只想把资料放进去、不确定放哪一期时，用「模糊添加」，对不上会自动新建</span></div></div>
     <div id="paneAdd" style="display:grid;gap:8px">
-    <textarea id="adT" rows="6" placeholder="随手粘贴，Claude 会按知识库规则判断放进哪一期、怎么导入。例如：&#10;https://confluence.example.com/pages/viewpage.action?pageId=67990565 编号8&#10;产品说：连续签到满 7 天才弹奖励弹窗&#10;测试账号 13800000000 / 密码 xxx（会存进基础知识库，密码只进钥匙串）"></textarea>
+    <textarea id="adT" rows="6" placeholder="随手粘贴，Claude 会按知识库规则判断放进哪一期 / 事项、怎么导入。例如：&#10;https://confluence.example.com/pages/viewpage.action?pageId=67990565 编号8&#10;产品说：连续签到满 7 天才弹奖励弹窗&#10;测试账号 13800000000 / 密码 xxx（会存进基础知识库，密码只进钥匙串）"></textarea>
     <div class="row"><label>放进<select id="adP"><option value="">自动判断（对不上会新建一期）</option>${ps.map(n=>`<option ${n===cur?'selected':''}>${esc(n)}</option>`).join('')}</select></label>
       <button class="pri" id="adGo">交给 Claude 添加</button><span class="mut small">⌘ + 回车 提交 · 后台运行，可关掉弹窗</span></div>
     <h3 style="margin:8px 0 0">最近记录</h3><div id="adList"><span class="mut small">加载中…</span></div></div>`);
-  const show=t=>{$('#paneAdd').style.display=t==='new'?'none':'grid';$('#paneNew').style.display=t==='new'?'grid':'none';
-    $('#tabAdd').classList.toggle('pri',t!=='new');$('#tabNew').classList.toggle('pri',t==='new');(t==='new'?$('#nN'):$('#adT')).focus()};
-  $('#tabAdd').onclick=()=>show('add');$('#tabNew').onclick=()=>show('new');
+  const show=t=>{$('#paneAdd').style.display=t==='add'?'grid':'none';$('#paneNew').style.display=t==='new'?'grid':'none';$('#paneTask').style.display=t==='task'?'grid':'none';
+    $('#tabAdd').classList.toggle('pri',t==='add');$('#tabNew').classList.toggle('pri',t==='new');$('#tabTask').classList.toggle('pri',t==='task');({add:$('#adT'),new:$('#nN'),task:$('#tkN')})[t].focus()};
+  $('#tabAdd').onclick=()=>show('add');$('#tabNew').onclick=()=>show('new');$('#tabTask').onclick=()=>show('task');
+  $('#tkGo').onclick=async()=>{try{const n=$('#tkN').value.trim();if(!n)return toast('请填事项名');
+    const r=await post('/api/task',{name:n,kind:$('#tkK').value,priority:$('#tkP').value,source:$('#tkF').value.trim(),summary:$('#tkS').value.trim()});
+    dlg.close();toast('已创建事项');location.hash='#/p/'+enc(r.name)}catch(e){toast(e.message)}};
   $('#nGo').onclick=async()=>{try{const n=$('#nN').value.trim();await post('/api/new',{name:n,summary:$('#nS').value});dlg.close();location.hash='#/p/'+enc(n)}catch(e){toast(e.message)}};
   $('#nN').onkeydown=e=>{if(e.key==='Enter')$('#nGo').click()};
   const go=async()=>{const t=$('#adT').value.trim();if(!t)return toast('请粘贴要添加的内容');
@@ -827,15 +1214,139 @@ function needDlg(body,n){
     try{await devStart(b)}catch(e){toast(e.message);g.disabled=false;g.textContent='继续开始开发'}};
 }
 
+// ---------------- 工具插件入口（如 Hermes 会话）：输入 → 候选 → 加入事项；事项页只展示原始内容 + 一个输入框 +「分析推动」
+const fullView={};
+function delPeriod(name,isTask){
+  const k=isTask?'事项':'期';
+  openDlg(`删除${k} · ${name}`,`<div class="form"><p style="margin:0">把这个${k}从知识库里<b>整个删掉</b>：资料、文字资料、记录、开发会话记录都不再出现在知识库里，也搜不到。</p>
+    <ul class="small" style="margin:6px 0 0;padding-left:18px"><li>归到它的禅道 Bug 回到「待归纳」；关联的 ANR / 崩溃问题取消关联；它占着的手机释放</li>
+    <li>目录移到系统<b>废纸篓</b>，真删错了还能从废纸篓找回；代码仓库里的代码和提交不动</li><li>后台会话在跑时不能删，先停止</li></ul>
+    <label>输入${k}名称确认<input type="text" id="dpC" placeholder="${esc(name)}"></label>
+    <div class="row"><button class="danger" id="dpGo">🗑 删除</button><button onclick="dlg.close()">取消</button></div></div>`);
+  $('#dpGo').onclick=async()=>{try{const r=await post('/api/period/delete',{period:name,confirm:$('#dpC').value});dlg.close();toast(r.msg);location.hash='#/'}catch(e){toast(e.message)}};
+}
+function rawGroups(ms){   // 连续几条只有工具调用、没有文字的，合成一条折叠
+  const out=[];for(const m of ms){const only=m['角色']!=='用户'&&m['角色']!=='摘要'&&!m['内容']&&(m['工具']||[]).length;
+    if(only){const l=out[out.length-1];if(l&&l.steps)l.steps.push(m);else out.push({steps:[m]})}else out.push(m)}
+  return out}
+function rawView(c){
+  const tl=t=>t['工具']?`<div><b>🔧 ${esc(t['工具'])}</b> <span class="mut">${esc(t['参数']||'')}</span>${t['结果']?`<pre>${esc(t['结果'])}</pre>`:''}</div>`:'';
+  return `<div class="raw">${(c['会话']||[]).map((x,i)=>`${i?'<hr>':''}<div class="small mut">${esc(x['编号'])} · ${esc(x['来源']||'')}${x['提问人']?' · 提问人 '+esc(x['提问人']):''} · 最近 ${esc(x['时间']||'')} · ${x['消息数']||0} 条消息　<a href="${esc(x['地址'])}" target="_blank" rel="noopener">在原系统打开 ↗</a></div>
+    ${rawGroups(x['消息']||[]).map(m=>m.steps?`<details class="steps"><summary>🔧 ${m.steps.length} 步工具调用（${esc(m.steps[0]['时间'].slice(11))}–${esc(m.steps[m.steps.length-1]['时间'].slice(11))}）：${esc([...new Set(m.steps.flatMap(x=>x['工具'].map(t=>t['工具'])))].join('、'))}</summary>${m.steps.flatMap(x=>x['工具']).map(tl).join('')}</details>`
+      :m['角色']==='摘要'?`<details class="msg"><summary class="who">上下文压缩前的摘要 · ${esc(m['时间'])}</summary><div class="md">${md(m['内容']).html}</div></details>`
+      :`<div class="msg ${m['角色']==='用户'?'u':''}"><div class="who">${m['角色']==='用户'?'👤 用户':'🤖 '+esc(m['角色'])} · ${esc(m['时间'])}</div>
+        ${m['内容']?`<div class="md">${md(m['内容']).html}</div>`:''}
+        ${(m['工具']||[]).length?`<details class="tools"><summary class="mut">🔧 ${m['工具'].length} 次工具调用：${esc([...new Set(m['工具'].map(t=>t['工具']))].join('、'))}</summary>${m['工具'].map(tl).join('')}</details>`:''}</div>`).join('')}`).join('')}</div>`;
+}
+async function toolPage(id){
+  if(!entries.length){try{sideNav(await api('/api/overview'))}catch(_){}}
+  const e=entries.find(x=>x.id===id);
+  if(!e){app.innerHTML=`<p>没有这个入口：${esc(id)}（插件没挂载，或没有「入口」）。<a href="#/settings">去设置 →</a></p>`;return}
+  let last='';try{last=sessionStorage.getItem('kb.tool.'+id)||''}catch(_){}
+  app.innerHTML=`<div class="pagehead"><div><div class="crumb"><a href="#/">总览</a> / 插件入口</div><h1>${esc(e['图标'])} ${esc(e['名称'])}</h1><div class="mut">${esc(e['说明']||'')}</div></div></div>
+    <div class="card2 pushin"><div class="bd"><textarea id="tIn" rows="3" placeholder="${esc(e['提示']||'')}">${esc(last)}</textarea>
+      <div class="row" style="margin-top:6px"><button class="pri" id="tGo">查找</button><span class="mut small">resume=… 精确拉取；其他内容按标题、开头的提问和关键词模糊查找（Cmd+Enter）</span></div></div></div>
+    <div id="tRes" style="margin-top:12px"></div>
+    <div id="tItems" style="margin-top:16px"></div>`;
+  toolItems(id);
+  const go=async()=>{const q=$('#tIn').value.trim();if(!q)return toast('先输入内容');try{sessionStorage.setItem('kb.tool.'+id,q)}catch(_){}
+    const b=$('#tGo');b.disabled=true;b.textContent='查找中…';$('#tRes').innerHTML='<span class="mut">查找中…</span>';
+    try{const r=await api('/api/plugin/resolve?id='+enc(id)+'&q='+enc(q));showCands(id,r.items)}catch(err){$('#tRes').innerHTML=`<span style="color:var(--s4)">${esc(err.message)}</span>`}
+    finally{b.disabled=false;b.textContent='查找'}};
+  $('#tGo').onclick=go;$('#tIn').onkeydown=ev=>{if(ev.key==='Enter'&&(ev.metaKey||ev.ctrlKey))go()};
+  if(last&&/resume=/.test(last))go();
+}
+async function toolItems(id){
+  let d;try{d=await api('/api/overview')}catch(_){return}
+  ovPeriods=d.periods;const box=$('#tItems');if(!box)return;
+  const ts=d.periods.filter(p=>(p.plugins||[]).includes(id)),open=ts.filter(p=>p.status!=='已完成'),done=ts.filter(p=>p.status==='已完成');
+  const row=p=>`<a class="cand" href="#/p/${enc(p.name)}" style="display:block;color:inherit"><div class="row" style="justify-content:space-between;align-items:baseline">
+      <b>${esc(p.name)}</b><span>${p.pendingQ?`<span class="badge st-已批准开发">🔔 ${p.pendingQ} 个待你确认</span> `:''}${p.running?'<span class="badge st-开发中">● 推动中</span> ':''}${badge(p.status)}</span></div>
+    <div class="small mut">${esc((p.srcTitles||[]).join('；'))}${p.lastLog?' · 最近：'+esc((p.lastLog.time||'')+' '+(p.lastLog.action||'')+' '+(p.lastLog.content||'').slice(0,60)):''}</div></a>`;
+  box.innerHTML=`<h3 style="margin:0 0 4px;font-size:15px">待解决（${open.length}）</h3>${open.map(row).join('')||'<div class="mut small">还没有。上面找到会话后点「加入事项」。</div>'}
+    ${done.length?`<details style="margin-top:10px"><summary class="small mut">已完成（${done.length}）</summary>${done.map(row).join('')}</details>`:''}`;
+}
+function showCands(id,items){
+  if(!items.length){$('#tRes').innerHTML='<span class="mut">没找到。换几个关键词试试，或直接给 resume=会话编号。</span>';return}
+  $('#tRes').innerHTML=`<div class="small mut">找到 ${items.length} 个，最像的在前：</div>`+items.map((x,i)=>`<div class="cand"><div class="row" style="justify-content:space-between;align-items:baseline">
+      <b>${esc(x['标题'])}</b><span class="small mut mono">${esc(x['编号'])}</span></div>
+    ${x['错误']?'':`<div class="small mut">${esc([x['来源'],x['提问人']&&'提问人 '+x['提问人'],x['时间'],x['消息数']+' 条消息',x['匹配']].filter(Boolean).join(' · '))}</div>
+    ${x['摘要']?`<div class="small" style="margin-top:2px">${esc(x['摘要'])}</div>`:''}
+    <div class="row" style="margin-top:6px"><button data-cv="${i}">预览</button><button class="pri" data-ct="${i}">加入事项</button>
+      ${(x['事项']||[]).length?`<span class="small">已在：${x['事项'].map(t=>`<a href="#/p/${enc(t)}">${esc(t)}</a>`).join('、')}</span>`:''}</div>`}</div>`).join('');
+  $('#tRes').querySelectorAll('[data-cv]').forEach(b=>b.onclick=async()=>{const x=items[+b.dataset.cv];
+    openDlg(x['标题'],'<span class="mut">拉取中…</span>');
+    try{const c=await api('/api/plugin/content?id='+enc(id)+'&item='+enc(x['编号']));$('#dlgB').innerHTML=rawView(c)}catch(e){$('#dlgB').innerHTML=esc(e.message)}});
+  $('#tRes').querySelectorAll('[data-ct]').forEach(b=>b.onclick=()=>{const x=items[+b.dataset.ct];
+    openDlg('加入事项',`<div class="form"><div class="small mut">知识库只记来源（编号、标题、地址），原始内容在事项页实时拉取。</div>
+      <label>加入到<select id="ctT"><option value="＋新建">＋ 新建事项</option>${taskNames.map(t=>`<option>${esc(t)}</option>`).join('')}</select></label>
+      <label id="ctNl">新事项名称<input type="text" id="ctN" value="${esc(x['标题'])}"></label>
+      <div class="row"><button class="pri" id="ctGo">加入</button></div></div>`);
+    $('#ctT').onchange=()=>$('#ctNl').hidden=$('#ctT').value!=='＋新建';
+    $('#ctGo').onclick=async()=>{try{const r=await post('/api/plugin/task',{id,item:x['编号'],task:$('#ctT').value,name:$('#ctN').value.trim(),title:x['标题'],url:''});
+      dlg.close();toast(r.msg);location.hash='#/p/'+enc(r.name)}catch(e){toast(e.message)}}});
+}
+function pushPage(d){
+  const m=d.meta,name=d.name,src=m['外部来源']||[];
+  const concl=(d.materials['其他资料']||[]).filter(f=>/结论/.test(f.name));
+  const ent=entries.find(x=>x.id===src[0]['插件']);
+  app.innerHTML=`<div class="pagehead"><div style="min-width:0"><div class="crumb"><a href="#/">总览</a> / ${ent?`<a href="#/tool/${enc(ent.id)}">${esc(ent['图标']+' '+ent['名称'])}</a>`:'事项'}</div>
+      <h1>${esc(name)} ${badge(m['状态'])}</h1>
+      <div class="small mut">${src.map(x=>`${esc(x['名称']||x['插件'])} <a href="${esc(x['地址']||'#')}" target="_blank" rel="noopener" class="mono">${esc(x['编号'])}</a>`).join('　')}
+        ${concl.length?'　结论：'+concl.map(f=>`<a data-read="${esc(f.path)}">${esc(f.name)}</a>`).join(' '):''}　<a id="puFull">完整页面</a>　<a id="puDel" style="color:var(--s4)">删除</a></div></div></div>
+    <div class="card2 pushin"><div class="bd"><textarea id="puIn" rows="3" placeholder="想怎么推动（可空）：如「确认是不是客户端的问题；是的话把修复移到 master，先别提交」">${esc(drafts['push:'+name]||'')}</textarea>
+      <div class="row" style="margin-top:6px"><button class="pri" id="puGo">分析推动</button><span class="mut small" id="puTip">点了就是你批准处理：后台 AI 实时拉取原始内容 → 在本地代码里核实 → 需要你拍板的问题出现在下面 → 改代码前先问你</span></div>
+      <div id="pushBox"></div></div></div>
+    ${src.map((x,i)=>`<div class="card2" style="margin-top:12px"><div class="bd"><div class="row" style="justify-content:space-between"><b>${esc(x['标题']||x['编号'])}</b><a data-rf2="${i}" class="small">刷新</a></div><div id="raw${i}"><span class="mut">原始内容拉取中…</span></div></div></div>`).join('')}`;
+  app.querySelectorAll('[data-read]').forEach(a=>a.onclick=()=>readFile(a.dataset.read));
+  $('#puFull').onclick=()=>{fullView[name]=1;render()};
+  $('#puDel').onclick=()=>delPeriod(name,true);
+  const ta=$('#puIn');ta.oninput=()=>drafts['push:'+name]=ta.value;
+  $('#puGo').onclick=async()=>{const t=ta.value.trim(),b=$('#puGo');b.disabled=true;
+    try{const r=await post('/api/task/push',{period:name,text:t});delete drafts['push:'+name];ta.value='';toast(r.msg);pushBox(name)}
+    catch(e){if(e.need){delete drafts['push:'+name];needDlg({period:name,note:t||'网页「分析推动」',confirm:name},e.need)}else toast(e.message)}
+    finally{b.disabled=false}};
+  ta.onkeydown=e=>{if(e.key==='Enter'&&(e.metaKey||e.ctrlKey))$('#puGo').click()};
+  const load=(i,fresh)=>api('/api/plugin/content?id='+enc(src[i]['插件'])+'&item='+enc(src[i]['编号'])+(fresh?'&fresh=1':''))
+    .then(c=>{const el=$('#raw'+i);if(el)el.innerHTML=rawView(c)}).catch(e=>{const el=$('#raw'+i);if(el)el.innerHTML=`<span style="color:var(--s4)">${esc(e.message)}</span>`});
+  src.forEach((_,i)=>load(i));
+  app.querySelectorAll('[data-rf2]').forEach(a=>a.onclick=()=>{$('#raw'+a.dataset.rf2).innerHTML='<span class="mut">拉取中…</span>';load(+a.dataset.rf2,true)});
+  pushBox(name);
+}
+async function pushBox(name){
+  const box=$('#pushBox');if(!box)return;
+  let v;try{v=await api('/api/dev?name='+enc(name))}catch(e){box.innerHTML='';return}
+  if(!$('#pushBox'))return;
+  const sig=JSON.stringify([v['会话'],v['待确认'],v['动作'].slice(-6)]);if(box.dataset.sig===sig)return;
+  if(box.dataset.sig&&document.activeElement&&box.contains(document.activeElement)&&document.activeElement.matches('textarea'))return;
+  const s=v['会话'],run=s&&s['状态']==='运行中',pend=v['待确认'].filter(q=>q['状态']==='待回答');
+  const go=$('#puGo');if(go){go.textContent=run?'发给正在推动的 AI':'分析推动'}
+  box.innerHTML=(s?`<div class="small" style="margin-top:10px">${run?`<span class="badge st-开发中">● 推动中</span> 已运行 <span data-since="${esc(s['开始时间'])}">${since(s['开始时间'])}</span> · ${esc((s['仓库']||'').split('/').pop())} ${esc(s['分支']||'')}　<a id="puStop" style="color:var(--s4)">停止</a>`
+      :`<span class="badge st-${s['退出码']?'已暂停':'已完成'}">上次推动${esc(s['状态'])}</span> <span class="mut">${esc(s['结束时间']||'')}</span>`}</div>`:'')
+    +pend.map(q=>`<div class="q" data-q="${esc(q['编号'])}"><div style="font-weight:600">🔔 ${esc(q['问题'])}</div>${q['背景']?`<div class="ctx md">${md(q['背景']).html}</div>`:''}
+      ${q['AI建议']?`<div class="small">AI 建议：<b>${esc(q['AI建议'])}</b></div>`:''}<div class="opts">${q['选项'].map((o,i)=>`<button data-opt="${i}">${esc(o)}</button>`).join('')}${q['AI建议']?'<button data-ai="1">采用 AI 建议</button>':''}</div>
+      <textarea rows="2" placeholder="你的回答（Cmd+Enter 提交）">${esc(drafts[q['编号']]||'')}</textarea><div class="row" style="margin-top:6px"><button class="pri" data-ans="1">提交回答</button></div></div>`).join('')
+    +(v['动作'].length?`<details style="margin-top:8px" ${run?'open':''}><summary class="small mut">最近动作</summary><div class="act">${v['动作'].slice(-8).reverse().map(actLine).join('')}</div></details>`:'');
+  box.dataset.sig=sig;
+  const st=$('#puStop');if(st)st.onclick=async()=>{if(!confirm('停止正在推动的后台 AI？'))return;try{toast((await post('/api/dev/stop',{period:name})).msg);pushBox(name)}catch(e){toast(e.message)}};
+  box.querySelectorAll('.q').forEach(el=>{const id=el.dataset.q,ta=el.querySelector('textarea'),q=pend.find(x=>x['编号']===id);
+    ta.oninput=()=>drafts[id]=ta.value;
+    el.querySelectorAll('[data-opt]').forEach(b=>b.onclick=()=>{ta.value=q['选项'][+b.dataset.opt];drafts[id]=ta.value;ta.focus()});
+    const ai=el.querySelector('[data-ai]');if(ai)ai.onclick=()=>{ta.value=q['AI建议'];drafts[id]=ta.value;ta.focus()};
+    const ok=async()=>{try{toast((await post('/api/answer',{period:name,id,answer:ta.value})).msg);delete drafts[id];box.dataset.sig='';pushBox(name)}catch(e){toast(e.message)}};
+    el.querySelector('[data-ans]').onclick=ok;ta.onkeydown=e=>{if(e.key==='Enter'&&(e.metaKey||e.ctrlKey))ok()}});
+}
+
 // ---------------- 设置：开发流程（其他研发组可改成自己的流程）
 function plDlg(d,p,mount){
   const ev=Object.keys(d.pluginEvents), on=new Set(p['时机']);
   const field=c=>{const v=p['配置'][c['键']]||'', id='plc_'+c['键'];
-    const inp=(c['类型']||'').startsWith('select:')?`<select data-pc="${esc(c['键'])}">${c['类型'].slice(7).split('|').map(o=>`<option ${o===v?'selected':''}>${esc(o)}</option>`).join('')}</select>`
+    const inp=c['类型']==='base'?`<select data-pc="${esc(c['键'])}"><option value="">（不选）</option>${(d.baseEntries||[]).map(b=>`<option value="${esc(b['编号'])}" ${b['编号']===v?'selected':''}>${esc(b['编号']+' '+b['名称'])}</option>`).join('')}</select>`
+      :(c['类型']||'').startsWith('select:')?`<select data-pc="${esc(c['键'])}">${c['类型'].slice(7).split('|').map(o=>`<option ${o===v?'selected':''}>${esc(o)}</option>`).join('')}</select>`
       :`<input type="text" data-pc="${esc(c['键'])}" value="${esc(v)}">`;
     return `<label>${esc(c['标题'])}${inp}${c['说明']?`<span class="small mut">${esc(c['说明'])}</span>`:''}</label>`};
   openDlg(`${mount?'挂载':'设置'}插件 · ${p['名称']}`,`<div class="form"><div class="small mut">${esc(p['说明']||'')}</div>
-    <div><b class="small">在什么时候运行</b>${ev.map(e=>`<label class="small" style="display:block;margin-top:4px"><input type="checkbox" data-pe="${esc(e)}" ${on.has(e)?'checked':''}> <b>${esc(e)}</b>　<span class="mut">${esc(d.pluginEvents[e])}</span></label>`).join('')}</div>
+    ${p['工具']?`<div class="small"><b>按需调用</b>　<span class="mut">不挂时机：在对话里把${esc(p['参数']||'参数')}给 Claude（它用 kb_plugin_call 调用），或终端 <code>kb plugin call ${esc(p.id)} …</code></span></div>`:`<div><b class="small">在什么时候运行</b>${ev.map(e=>`<label class="small" style="display:block;margin-top:4px"><input type="checkbox" data-pe="${esc(e)}" ${on.has(e)?'checked':''}> <b>${esc(e)}</b>　<span class="mut">${esc(d.pluginEvents[e])}</span></label>`).join('')}</div>`}
     ${(p['配置项']||[]).map(field).join('')}
     <div class="row"><button class="pri" id="plOk">${mount?'挂载':'保存'}</button></div></div>`);
   $('#plOk').onclick=async()=>{const events=[...$('#dlgB').querySelectorAll('[data-pe]:checked')].map(x=>x.dataset.pe),config={};
@@ -865,12 +1376,13 @@ async function settingsPage(){
   const pcard=p=>`<div class="bcard"><div class="row" style="justify-content:space-between"><b>${esc(p['名称'])}</b>
       <span>${p['错误']?'<span class="badge st-已暂停">有错误</span>':p['启用']?'<span class="badge st-开发中">已挂载</span>':'<span class="chip">未挂载</span>'}${p['外部']?' <span class="chip">外部目录</span>':''}</span></div>
     <div class="small mut" style="margin:4px 0">${esc(p['错误']||p['说明']||'')}</div>
-    ${p['错误']?'':`<div class="small">时机：${p['启用']?p['时机'].map(esc).join('、'):'（挂载后生效）'+(p['时机'].length?' 默认 '+p['时机'].map(esc).join('、'):'')}
+    ${p['错误']?'':`<div class="small">${p['工具']?'按需调用'+(p['参数']?'：'+esc(p['参数']):''):'时机：'+(p['启用']?p['时机'].map(esc).join('、'):'（挂载后生效）'+(p['时机'].length?' 默认 '+p['时机'].map(esc).join('、'):''))}
       ${(p['识别文件']||[]).length?' · 仓库里有 '+p['识别文件'].map(x=>'<code>'+esc(x)+'</code>').join(' ')+' 才运行':''}</div>
-      ${(p['配置项']||[]).map(c=>`<div class="small">${esc(c['标题'])}：<b>${esc(p['配置'][c['键']]||'（空）')}</b></div>`).join('')}
+      ${(p['配置项']||[]).map(c=>{const v=p['配置'][c['键']]||'',b=c['类型']==='base'&&(d.baseEntries||[]).find(x=>x['编号']===v);
+        return `<div class="small">${esc(c['标题'])}：<b>${esc(b?v+' '+b['名称']:v||'（空）')}</b></div>`}).join('')}
       <div class="small mut">${esc(p['版本']?'版本 '+p['版本']+' · ':'')}<span class="mono">${esc(p['目录'].replace(/^\/Users\/[^/]+/,'~'))}</span></div>`}
     <div class="row" style="margin-top:8px">${p['错误']?'':`<button class="${p['启用']?'':'pri'}" data-pmount="${esc(p.id)}">${p['启用']?'卸下':'挂载'}</button>
-      <button data-pset="${esc(p.id)}">时机与配置</button><button data-prun="${esc(p.id)}" title="选一期，用它的开发仓库运行一次">运行一次</button>`}
+      <button data-pset="${esc(p.id)}">${p['工具']?'配置':'时机与配置'}</button>${p['工具']&&p['入口']&&p['启用']?`<a class="btn" href="#/tool/${enc(p.id)}"><button>${esc((p['入口']['图标']||'🔌')+' 打开入口')}</button></a>`:''}${p['工具']?'':`<button data-prun="${esc(p.id)}" title="选一期，用它的开发仓库运行一次">运行一次</button>`}`}
       ${p['外部']?`<button class="danger" data-prm="${esc(p.id)}">移除</button>`:''}</div></div>`;
   const st=e=>e['状态'],ecard=e=>`<div class="bcard"><div class="row" style="justify-content:space-between"><b>${esc(e['名称'])}</b>
       <span>${e['默认']?'<span class="badge st-开发中">默认</span> ':''}<span class="chip">${e['内置']?'内置'+(e['已修改']?' · 已修改':''):'自定义'}</span></span></div>
@@ -1044,6 +1556,9 @@ async function render(){
     else if(h==='/base')await basePage();
     else if(h==='/settings')await settingsPage();
     else if(h==='/phones')await phonesPage();
+    else if(h==='/bugs')await bugsPage();
+    else if(h==='/anr')await anrPage();
+    else if(h.startsWith('/tool/'))await toolPage(h.slice(6));
     else if(h.startsWith('/s/')){const [q,s]=h.slice(3).split('\u0001');await search(q,s)}
     else await overview();
   }catch(e){app.innerHTML=`<p>出错：${esc(e.message)}</p><p><a href="#/">返回首页</a></p>`}
@@ -1059,9 +1574,9 @@ const canRender=()=>!Object.values(drafts).some(x=>x)&&!dlg.open&&!document.acti
 function softRender(){if(!canRender()){pagePending=true;return}pagePending=false;const y=scrollY;render().then(()=>scrollTo(0,y))}
 function onEvt(ev){
   const h=decodeURIComponent(location.hash.slice(1)||'/'), p=curPeriod();
-  if(ev.kind==='dev'&&p===ev.period)devBox(p);
+  if(ev.kind==='dev'&&p===ev.period){if($('#pushBox'))pushBox(p);else devBox(p)}
   else if(ev.kind==='page'&&p===ev.period)softRender();
-  else if(ev.kind==='overview'&&h==='/')softRender();
+  else if(ev.kind==='overview'&&(h==='/'||h==='/bugs'||h==='/anr'))softRender();
   if(ev.kind==='overview'&&h!=='/')navRefresh();
   else if(ev.kind==='adds'){if(dlg.open&&$('#adList'))addList();else if(h==='/')softRender()}
 }

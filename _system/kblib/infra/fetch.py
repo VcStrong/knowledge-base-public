@@ -72,7 +72,7 @@ def http_get(url, max_bytes=MAX_DOWNLOAD):
         raise FetchError(f'连不上 {host}：{e.reason}（是否需要 VPN？）')
 
 
-CACHE = Path(__file__).resolve().parent / 'cache'
+CACHE = Path(__file__).resolve().parents[2] / 'cache'      # _system/cache
 CACHE_TTL = 1800
 
 

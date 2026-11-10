@@ -103,7 +103,7 @@ AI 在「收集中」拿不到开发包，也不能自己批准；网页的批�
 ```
 ~/knowledge-base/
 ├── kb, install.sh            命令入口、安装脚本
-├── _system/                  程序（kb.py MCP 服务与命令行、web.py/web.html 网页、fetch.py 抓取）
+├── _system/                  程序（kb.py 入口：MCP 服务与命令行；kblib/ 按功能分层的实现；web.py/web.html 网页）
 ├── 期/<期名>/                 每期资料：需求/ 设计图/ 接口文档/ 其他资料/ 来源快照/ 期信息.json 记录.md
 ├── 基础/                      基础知识库（机密在钥匙串）
 ├── 收件箱/                    随手丢进来的资料

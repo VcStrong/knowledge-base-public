@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import devlock  # noqa: E402
+from kblib.infra import devlock  # noqa: E402
 
 # 不碰手机状态的命令
 READ = {'devices', 'version', 'help', 'start-server', 'get-state', 'get-serialno', 'get-devpath', 'keygen', 'mdns',
