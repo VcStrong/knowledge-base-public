@@ -11,8 +11,8 @@ from ..engines import engine_popen, get_engine
 from ..devprep import _git
 from ..devsession import _alive, _dev_env
 from ..devices import dev_activity
-from ..bugs.index import ZT_DIR, _zt_recheck, zt_load, zt_save
-from ..bugs.analysis import _AN, _an_finish, _an_load, _an_save, _bug_repo, _fx_heal, an_sessions
+from ..bugs.index import ZT_DIR, _zt_recheck, an_skip, zt_load, zt_save
+from ..bugs.analysis import _AN, _an_finish, _an_load, _an_md, _an_save, _bug_repo, _fx_heal, an_sessions
 
 
 FX_MAX_BUGS = 5
@@ -48,7 +48,8 @@ def _fx_prompt(root, branch, items):
   原因：{a.get("原因") or "（无）"}
   修复思路：{a.get("思路") or "（无）"}
   影响范围：{a.get("影响") or "（无）"}
-  自测要点：{a.get("自测") or "（无）"}""" + (f'\n  用户审核意见：{a["意见"]}' if a.get('意见') else ''))
+  自测要点：{a.get("自测") or "（无）"}""" + (f'\n  用户审核意见（最新，以这条为准；和上面的修复思路冲突时按意见改）：{a["意见"]}' if a.get('意见') else '')
+                   + _fx_last(e))
     out.append("""
 每个 Bug 依次做：
 1. kb_bug_get 实时拉取，确认 Bug 还要修（平台上已关闭、或内容跟分析时不一样了，就不改，直接 kb_bug_fixed 报告 done=false 并写明原因）。
@@ -61,9 +62,29 @@ def _fx_prompt(root, branch, items):
     return '\n'.join(out)
 
 
-def bug_fix(ids, by='用户（网页）'):
+def _fx_last(e):
+    """上一次没修成的原因：带给这次的修复会话，免得再走同一条走不通的路。"""
+    p = (e.get('修复') or {}).get('上次')
+    if not p:
+        return ''
+    return f'\n  上一次修复没修成（{p.get("时间")}）：{p.get("说明")}\n  这次按最新的审核意见改，不要重复上次走不通的做法。'
+
+
+def set_fix_note(e, note, by):
+    """点「修复」时意见框里写的就是最新审核意见：替换当前意见，旧的进历史（不再给修复会话）。"""
+    note = (note or '').strip()
+    a = e.get('分析') or {}
+    if not note or note == (a.get('意见') or '').strip():
+        return False
+    if a.get('意见'):
+        a.setdefault('意见历史', []).append({'意见': a['意见'], '时间': a.get('审核时间') or a.get('时间') or '', '人': a.get('审核人') or ''})
+    a.update(意见=note, 审核时间=now(), 审核人=by)
+    return True
+
+
+def bug_fix(ids, by='用户（网页）', note=None):
     """网页「🔧 修复」= 本人批准修：加入修复队列，能开始的立刻开始；仓库忙就排队，分支不对 / 有未提交改动就标「阻塞」等你处理。
-    不作为 MCP 工具提供。"""
+    note：意见框里写的审核意见（只修一个 Bug 时），替换之前的意见，修复会话以它为准。不作为 MCP 工具提供。"""
     ids = [str(i).strip() for i in (ids if isinstance(ids, (list, tuple)) else [ids]) if str(i).strip()]
     ids, skipped = _zt_recheck(ids, '修复前核对')        # 已经转给别人的直接移除，不进队列
     added = []
@@ -88,7 +109,12 @@ def bug_fix(ids, by='用户（网页）'):
                 if not root:
                     skipped.append(f'{bid}：不知道在哪个仓库修')
                     continue
-                e['修复'] = {'状态': '排队中', '排队时间': now(), '排队序号': time.time() + len(added) * 1e-3, '仓库': root, '分支': a.get('分支') or _bug_repo(e)[1], '发起': by}
+                last = {'时间': f.get('时间') or '', '说明': f.get('说明') or ''} if f.get('状态') == '未完成' and f.get('说明') else f.get('上次')
+                if note is not None and len(ids) == 1 and set_fix_note(e, note, by):
+                    _fx_log(e, f'审核意见改为：{a["意见"]}（{by}）')
+                    _an_md(e)
+                e['修复'] = {'状态': '排队中', '排队时间': now(), '排队序号': time.time() + len(added) * 1e-3, '仓库': root, '分支': a.get('分支') or _bug_repo(e)[1], '发起': by,
+                             **({'上次': last} if last else {})}
                 _fx_log(e, f'加入修复队列（{by}）')
                 added.append(bid)
         zt_save(data)
@@ -197,7 +223,7 @@ def _fx_start(root, branch, part, by='修复队列'):
     head = _git(rp, 'rev-parse', 'HEAD').stdout.strip()
     o = part[0].get('归属') or {}
     proc = engine_popen(eng, _fx_prompt(root, branch, part), f'kb·修复·Bug {"、".join(e["编号"] for e in part)}', logf, root,
-                        env_extra=_dev_env(o.get('名称') or 'Bug 修复', branch, root))
+                        env_extra=dict(_dev_env(o.get('名称') or 'Bug 修复', branch, root), KB_SESSION='an:' + sid))
     _AN[sid] = proc
     rec = {'编号': sid, '类型': '修复', 'pid': proc.pid, '状态': '运行中', '开始时间': now(), '仓库': root, '分支': branch,
            '起点': head, 'Bug': [e['编号'] for e in part], '日志': str(logf), '引擎': eng['名称'], '发起': by}
@@ -253,6 +279,11 @@ def bug_fixed(bid, done=True, commits=None, note='', by='Claude'):
     e['修复'] = {**old, '状态': '已修复' if done else '未完成', '时间': now(), '提交': ok or old.get('提交', []),
                  '说明': note or '', '标记': by, '修改时间': e.get('修改时间', '')}
     e['修复'].pop('结果', None)
+    a = e.get('分析') or {}
+    if done:
+        an_skip(e)
+    elif a.get('状态') == '无需审核':
+        a['状态'] = a.pop('跳过前', '待审核')
     zt_save(data)
     _fx_log(e, ('已修复' if done else '未修成') + (f'，提交 {"、".join(x["提交"][:8] for x in ok)}' if ok else '') + (f'：{note}' if note else '') + f'（{by}）')
     return f'Bug {bid} 已在知识库标记为「{"已修复" if done else "未完成"}」（不改 Bug 平台）'
@@ -267,6 +298,9 @@ def bug_unfix(bid, by='用户（网页）'):
         raise KBError(f'Bug {bid} 正在修复，等会话结束再撤销')
     queued = e['修复'].get('状态') == '排队中'
     e.pop('修复')
+    a = e.get('分析') or {}
+    if a.get('状态') == '无需审核':
+        a['状态'] = a.pop('跳过前', '待审核')      # 撤销已修复：分析回到原来的审核状态
     zt_save(data)
     _fx_log(e, f'{"移出修复队列" if queued else "撤销修复标记"}（{by}）')
     return f'已把 Bug {bid} 移出修复队列' if queued else f'已撤销 Bug {bid} 的修复标记'

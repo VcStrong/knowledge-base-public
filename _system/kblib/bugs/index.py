@@ -75,7 +75,16 @@ def _bug_upgrade(e):
     for k in ('分析', '修复'):
         if isinstance(e.get(k), dict) and '禅道修改' in e[k]:
             e[k]['修改时间'] = e[k].pop('禅道修改')
+    an_skip(e)
     return e
+
+
+def an_skip(e):
+    """Bug 已修复（会话或手动标的）就不用再审分析了：待审核 / 需重分析 改成「无需审核」，原状态留着撤销时恢复。"""
+    a, f = e.get('分析'), e.get('修复') or {}
+    if isinstance(a, dict) and f.get('状态') == '已修复' and a.get('状态') in ('待审核', '需重分析'):
+        a['跳过前'] = a['状态']
+        a['状态'] = '无需审核'
 
 
 def zt_load():
@@ -221,6 +230,21 @@ def _zt_drop_other(e, by):
             pass
 
 
+def _zt_done(e):
+    """平台上已解决 / 已关闭（不论哪个平台，适配器都统一成 激活 / 已解决 / 已关闭）：不进知识库。正在修复的等会话结束再说。"""
+    return bool(e) and e.get('状态') != '激活' and (e.get('修复') or {}).get('状态') != '修复中'
+
+
+def _zt_drop_done(e, by):
+    """已解决 / 已关闭的移出索引；分析过、修过、手动归过的记一笔到归属的期 / 事项（分析结论文件留着，仍可检索）。"""
+    o = e.get('归属') or {}
+    if o.get('类型') in ('期', '事项') and o.get('名称') and (e.get('分析') or e.get('修复') or o.get('依据') == '手动'):
+        try:
+            log(period_dir(o['名称']), 'Bug', f'Bug {e["编号"]} {e["标题"]} 平台上{e.get("状态") or "已解决"}，从知识库移除（{by}）')
+        except KBError:
+            pass
+
+
 def _src_of(bid, data=None):
     """这个编号属于哪个来源：索引里有就按索引；没有就看前缀 / 编号样子，都不像就用第一个缺陷平台。"""
     bid = str(bid)
@@ -341,6 +365,8 @@ def _sync_one(c, pers, by, full):
         if _zt_other(bugs[bid], people):
             _zt_drop_other(bugs[bid], by)
         bugs.pop(bid)                   # 范围 / 平台改小了、转给别人了：索引里先清掉
+    for bid in [k for k, e in bugs.items() if mine(e) and _zt_done(e)]:
+        _zt_drop_done(bugs.pop(bid), by)  # 已解决 / 已关闭的不留
     res = {'new': [], 'changed': 0, 'gone': 0}
     ctx = {'全量': full, '人员': people, '平台': c.get('平台') or '安卓', '首次天数': ZT_FIRST_DAYS,
            '已有': {k: e.get('修改原值') for k, e in bugs.items() if mine(e)}}
@@ -356,6 +382,12 @@ def _sync_one(c, pers, by, full):
         for k in ZT_LOCAL:
             if old and old.get(k):
                 e[k] = old[k]
+        if _zt_done(e):                 # 已解决 / 已关闭：不同步进来，原来有的移除
+            if old:
+                _zt_drop_done(e, by)
+                bugs.pop(bid, None)
+                res['gone'] += 1
+            continue
         if (not _zt_want(e, c, me) and not _zt_keep(old)) or _zt_other(e, people):
             if old:                     # 不在范围里了（转给别人、换过范围 / 平台）：去掉
                 if _zt_other(e, people):
@@ -671,6 +703,9 @@ def zentao_bugs_json(period='', owner=''):
     return out
 
 
+CRASH_DONE = {'resolved', 'closed', '已解决', '已关闭', '已处理'}     # 崩溃平台上已解决的问题也不同步
+
+
 def _crash_sync(c, by, full):
     """崩溃平台 → ANR / 崩溃：每个平台问题对应一个样本（堆栈 + 平台上的累计次数），按签名和手动导入的日志合并。"""
     src = bug_source(c, by=by)
@@ -679,7 +714,7 @@ def _crash_sync(c, by, full):
     if full:
         state.pop('游标', None)
     items = _src_call(lambda: [x for x in src.sync(state, {'全量': full, '平台': c.get('平台'), '首次天数': ZT_FIRST_DAYS})
-                               if '删除' not in x])
+                               if '删除' not in x and str(x.get('状态') or '').lower() not in CRASH_DONE])
     r = _anr_store.anr_platform_upsert(c['ID'], items, by=by)
     data['同步'][c['ID']] = f'{now()} 完成'
     data['上次同步'] = now()

@@ -6,7 +6,7 @@
 - 崩溃聚合（Sentry、Firebase Crashlytics、Bugly…）→ 「💥 ANR / 崩溃」页：sync 产出「问题」（签名、堆栈、次数、版本、链接）。
 
 适配器协议里没有任何写操作：知识库从不回写外部平台。
-公司 / 小组特有的平台不写进这里，做成「Bug平台」类型的插件（见《插件》），由 PluginSource 按同一协议调用。
+公司 / 小组特有的平台不写进这里，做成「Bug平台」类型的插件（协议见 adapters/plugin.py），由 PluginSource 按同一协议调用。
 
 本模块不 import kb（kb.py 也会作为 __main__ 运行，反向 import 会加载出第二份）；凭据由调用方经 Cred 交进来。
 

@@ -36,7 +36,10 @@ _MODULES = [
     'bugs.index',
     'bugs.analysis',
     'bugs.fix',
+    'talk',
     'anr.store',
+    'anr.manual',
+    'builds',
     'mcp',
     'cli',
 ]

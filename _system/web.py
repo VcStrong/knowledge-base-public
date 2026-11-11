@@ -11,6 +11,7 @@ import json
 import mimetypes
 import os
 import queue
+import re
 import shutil
 import sys
 import threading
@@ -138,6 +139,13 @@ def api_overview():
         zb = [e for e in kb.zt_load()['Bug'].values() if e['状态'] != '已关闭']
     except Exception:
         zb = []
+    open_by = {}                     # 每期没解决的 Bug：平台上还是激活、知识库也没标已修复
+    for e in zb:
+        if e['状态'] == '激活' and (e.get('修复') or {}).get('状态') != '已修复':
+            n = (e.get('归属') or {}).get('名称')
+            open_by[n] = open_by.get(n, 0) + 1
+    for p in periods:
+        p['openBugs'] = open_by.get(p['name'], 0)
     for p in periods:
         p['bugs'] = sum(1 for e in zb if (e.get('归属') or {}).get('名称') == p['name'])
     zentao = {'open': len(zb), 'pending': sum(1 for e in zb if (e.get('归属') or {}).get('类型') == '待归纳')}
@@ -205,6 +213,10 @@ def dev_tick():
             kb.fix_queue_tick()          # 修复队列：仓库空出来、切好分支、提交了改动后自动开始
         except Exception as e:
             print('fix_queue_tick:', repr(e), flush=True)
+        try:
+            kb.talk_queue_tick()         # 期页面排队的内容：这一期会话都结束后开始处理
+        except Exception as e:
+            print('talk_queue_tick:', repr(e), flush=True)
 
 
 def _period_stamp(d, m):
@@ -247,7 +259,7 @@ def watcher():
                 if check('overview', _global_stamp(), api_overview_view):
                     _publish({'kind': 'overview'})
                 zs = [_mt(kb.ZT_FILE), kb.ZT_STATE['running'], _mt(kb.AN_SESS), _mt(kb.AR_FILE), _mt(kb.AR_PROB)] + [
-                    _mt(x.get('日志', '')) for x in kb._an_load() if x.get('类型') == '修复' and x.get('状态') == '运行中']   # 修复进度
+                    _mt(x.get('日志', '')) for x in kb._an_load() if x.get('状态') == '运行中']   # 分析 / 修复进度
                 if check('zentao', zs, lambda: zs):      # Bug 同步开始 / 结束：Bug 页刷新
                     _publish({'kind': 'overview'})
                 if check('adds', _add_stamp(), kb.add_sessions):
@@ -429,6 +441,10 @@ class H(BaseHTTPRequestHandler):
             return self._guard(lambda: {'items': kb.plugin_resolve(q.get('id', ''), q.get('q', ''))})
         if u.path == '/api/plugin/content':
             return self._guard(lambda: kb.plugin_content(q.get('id', ''), q.get('item', ''), q.get('fresh') == '1'))
+        if u.path == '/api/period/builds':
+            return self._guard(lambda: kb.period_builds(q.get('name', ''), fresh=q.get('fresh') == '1'))
+        if u.path == '/api/period/talk':
+            return self._guard(lambda: kb.period_talk(q.get('name', '')))
         if u.path == '/api/dev/activity':
             return self._guard(lambda: kb.dev_activity_all(q.get('name', '')))
         if u.path == '/api/devices':
@@ -476,6 +492,22 @@ class H(BaseHTTPRequestHandler):
                 finally:
                     shutil.rmtree(tmp, ignore_errors=True)
             return self._guard(run)
+        if u.path == '/api/anr/stage':          # 自建问题：先把文件暂存，提交时一起处理
+            if not self._from_page():
+                return self._send(403, {'error': '只能在知识库网页上由本人操作'})
+            sid = uuid.uuid4().hex
+            d = kb.SYS / 'tmp' / 'anr-stage' / sid
+            d.mkdir(parents=True)
+            f = d / (kb.safe_name(unquote(self.headers.get('X-Filename', ''))) or 'log.txt')
+            with f.open('wb') as fp:
+                left = n
+                while left > 0:
+                    chunk = self.rfile.read(min(left, 1 << 20))
+                    if not chunk:
+                        break
+                    fp.write(chunk)
+                    left -= len(chunk)
+            return self._send(200, {'id': sid})
         if u.path == '/api/anr/upload':
             h = lambda k: unquote(self.headers.get(k, ''))
             tmp = kb.SYS / 'tmp' / uuid.uuid4().hex
@@ -504,9 +536,9 @@ class H(BaseHTTPRequestHandler):
                       '/api/settings/flow/delete', '/api/settings/default', '/api/period/flow', '/api/settings/flow/draft',
                       '/api/engine', '/api/engine/delete', '/api/engine/default', '/api/engine/link', '/api/engine/test',
                       '/api/period/engine', '/api/retest', '/api/retest/plan', '/api/issue', '/api/device', '/api/dev/chat',
-                      '/api/plugin', '/api/plugin/dir', '/api/plugin/remove', '/api/plugin/run', '/api/plugin/task', '/api/task/push', '/api/period/delete',
+                      '/api/plugin', '/api/plugin/dir', '/api/plugin/remove', '/api/plugin/run', '/api/plugin/task', '/api/task/push', '/api/period/delete', '/api/period/say',
                       '/api/zentao/settings', '/api/bug/source', '/api/bug/test', '/api/zentao/analyze', '/api/zentao/review', '/api/zentao/fix',
-                      '/api/zentao/fixed', '/api/zentao/unfix') and not self._from_page():
+                      '/api/zentao/fixed', '/api/zentao/unfix', '/api/anr/create', '/api/anr/mapping-url', '/api/period/builds', '/api/build/mapping', '/api/anr/automap') and not self._from_page():
             return self._send(403, {'error': '只能在知识库网页上由本人操作'})
         if u.path == '/api/base/save':
             return self._guard(lambda: {'msg': kb.base_save(body.get('id', ''), body.get('category', ''), body.get('name'),
@@ -526,6 +558,9 @@ class H(BaseHTTPRequestHandler):
                                                          body.get('name', ''), body.get('title', ''), body.get('url', '')))
         if u.path == '/api/task/push':
             return self._guard(lambda: {'msg': kb.task_push(body.get('period', ''), body.get('text', ''))})
+        if u.path == '/api/period/say':
+            return self._guard(lambda: {'msg': kb.period_say(body.get('period', ''), body.get('text', ''), body.get('target', ''),
+                                                             body.get('interrupt', True) is not False, mode=body.get('mode') or 'insert')})
         if u.path == '/api/dev/chat':
             return self._guard(lambda: {'msg': kb.dev_chat(body.get('period', ''), body.get('text', ''), bool(body.get('interrupt')))})
         if u.path == '/api/retest':
@@ -640,7 +675,7 @@ class H(BaseHTTPRequestHandler):
             return self._guard(lambda: {'msg': kb.bug_analyze_in(body.get('ids') or [], body['repo']) if body.get('repo')
                                         else kb.bug_analyze(body.get('ids') or [])})
         if u.path == '/api/zentao/fix':
-            return self._guard(lambda: {'msg': kb.bug_fix(body.get('ids') or [])})
+            return self._guard(lambda: {'msg': kb.bug_fix(body.get('ids') or [], note=body.get('note'))})
         if u.path == '/api/zentao/fixed':
             return self._guard(lambda: {'msg': kb.bug_fixed(str(body.get('id', '')), body.get('done', True) is not False,
                                                             body.get('commits') or [], body.get('note', ''), by='用户（网页）')})
@@ -661,6 +696,30 @@ class H(BaseHTTPRequestHandler):
                 启用=body.get('enabled'), 范围=body.get('scope'), 人员=body.get('people'), 平台=body.get('platform'), 选项=body.get('options'))))
         if u.path == '/api/bug/test':
             return self._guard(lambda: {'msg': kb.bug_test(body.get('id', ''))})
+        if u.path == '/api/period/builds':
+            return self._guard(lambda: {'msg': kb.set_period_jobs(body.get('period', ''), body.get('jobs', ''))})
+        if u.path == '/api/build/mapping':
+            return self._guard(lambda: {'msg': kb.build_mapping(body.get('url', ''), body.get('version', ''))})
+        if u.path == '/api/anr/automap':
+            return self._guard(lambda: {'msg': kb.anr_auto_mapping(body.get('version', ''), by='用户（网页）')
+                                        or f'各期的构建里没找到版本 {body.get("version", "")} 的 mapping'})
+        if u.path == '/api/anr/mapping-url':
+            return self._guard(lambda: {'msg': kb.anr_mapping_url(body.get('version', ''), body.get('url', ''))})
+        if u.path == '/api/anr/create':
+            def run():
+                root = kb.SYS / 'tmp' / 'anr-stage'
+                staged = lambda i: next((root / i).iterdir()) if re.fullmatch(r'[0-9a-f]{32}', i or '') and (root / i).is_dir() else None
+                files = [staged(i) for i in body.get('files') or []]
+                mp = staged(body.get('mappingFile') or '')
+                try:
+                    return {'msg': kb.anr_create(body.get('text', ''), [f for f in files if f], body.get('title', ''),
+                                                 body.get('version', ''), body.get('source', ''), body.get('task', ''),
+                                                 body.get('note', ''), body.get('mappingUrl', ''), mp or '')}
+                finally:
+                    for i in (body.get('files') or []) + [body.get('mappingFile') or '']:
+                        if re.fullmatch(r'[0-9a-f]{32}', i or ''):
+                            shutil.rmtree(root / i, ignore_errors=True)
+            return self._guard(run)
         if u.path == '/api/anr/link':
             def run():
                 out = []

@@ -21,7 +21,7 @@ _bug_fix = lazy('kblib.bugs.fix')      # 上层模块：用到时才 import（�
 
 AN_DIR = ZT_DIR / '分析'
 AN_SESS = ZT_DIR / '分析会话.json'
-AN_STATES = ('待审核', '已通过', '需重分析')
+AN_STATES = ('待审核', '已通过', '需重分析', '无需审核')
 AN_MAX_BUGS = 6           # 一个会话最多分析几条
 AN_MAX_RUN = 3            # 同时最多几个分析会话
 _AN = {}                  # 会话编号 → Popen
@@ -195,7 +195,7 @@ def bug_analyze(ids, by='用户（网页）'):
             cur = _git(Path(root), 'branch', '--show-current').stdout.strip()
             git0 = _git(Path(root), 'status', '--porcelain').stdout
             proc = engine_popen(eng, _an_prompt(root, part, cur), f'kb·分析·Bug {"、".join(x[0]["编号"] for x in part)}', logf, root,
-                                extra_args=_readonly_args(eng))
+                                env_extra={'KB_SESSION': 'an:' + sid}, extra_args=_readonly_args(eng))
             _AN[sid] = proc
             rec = {'编号': sid, 'pid': proc.pid, '状态': '运行中', '开始时间': now(), '仓库': root, '分支': cur,
                    'Bug': [x[0]['编号'] for x in part], '日志': str(logf), '引擎': eng['名称'], '发起': by, 'git前': git0}
@@ -364,7 +364,8 @@ def _an_md(e):
 
 ## 自测要点
 {a["自测"] or "（无）"}
-""" + (f'\n## 还缺的信息\n{a["缺少"]}\n' if a.get('缺少') else '') + (f'\n## 审核意见\n{a["意见"]}\n' if a.get('意见') else ''), 'utf-8')
+""" + (f'\n## 还缺的信息\n{a["缺少"]}\n' if a.get('缺少') else '') + (f'\n## 审核意见\n{a["意见"]}\n' if a.get('意见') else '') + (
+        '\n## 之前的审核意见（已被替换）\n' + ''.join(f'- {h.get("时间")} {h.get("意见")}\n' for h in a['意见历史']) if a.get('意见历史') else ''), 'utf-8')
 
 
 def bug_review(bid, action, note='', by='用户（网页）'):
@@ -374,6 +375,9 @@ def bug_review(bid, action, note='', by='用户（网页）'):
     if not e or not e.get('分析'):
         raise KBError(f'Bug {bid} 还没有分析')
     a = e['分析']
+    if (note or '').strip() and a.get('意见') and note.strip() != a['意见'].strip():      # 换了意见：旧的留进历史
+        a.setdefault('意见历史', []).append({'意见': a['意见'], '时间': a.get('审核时间') or a.get('时间') or '', '人': a.get('审核人') or ''})
+    a.pop('跳过前', None)
     if action == '通过':
         a.update(状态='已通过', 审核时间=now(), 审核人=by, 意见=note or a.get('意见', ''))
     elif action == '打回':

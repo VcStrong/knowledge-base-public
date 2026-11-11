@@ -5,12 +5,6 @@
 !/kb
 !/install.sh
 !/使用说明.md
-!/安装与移植.md
-!/开发流程设置.md
-!/插件.md
-!/Bug平台.md
-!/事项.md
-!/ANR崩溃.md
 !/_system/
 /_system/*
 !/_system/kb.py

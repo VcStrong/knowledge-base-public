@@ -236,11 +236,18 @@ def anr_platform_upsert(sid, items, by='平台同步'):
     return f'ANR / 崩溃 新问题样本 {new}，更新 {upd}（共 {len(items)} 个平台问题）'
 
 
+def auto_version():
+    """没写版本时给 mapping（和同一次放进来的日志）起的版本名，不和已有的重名。"""
+    base = f'未标版本-{datetime.now():%Y%m%d-%H%M%S}'
+    v, i = base, 2
+    while (AR_MAPS / f'{safe_name(v)}.txt').exists():
+        v, i = f'{base}-{i}', i + 1
+    return v
+
+
 def anr_mapping(version, path, by='Claude'):
     """归档某个版本的 mapping.txt，并用它重算这个版本的样本（还原后签名会变，旧问题的事项关联会带过去）。"""
-    version = (version or '').strip()
-    if not version:
-        raise KBError('请写版本号（和样本里的版本对应，如 5.32.1）')
+    version = (version or '').strip() or auto_version()   # 不写版本也能归档：之后给样本补上这个版本名即可还原
     src = Path(path).expanduser().resolve()
     if not src.is_file():
         raise KBError(f'文件不存在：{src}')
@@ -272,7 +279,7 @@ def _ar_reprocess(pred, version=None):
     from ..anr import parse as anr
     with _AR_LOCK:
         samples = _ar_load()
-        todo = [s for s in samples if pred(s)]
+        todo = [s for s in samples if pred(s) and s.get('类型') != '手动']     # 手动建的没有堆栈，不重算
         if not todo:
             return 0, 0
         evs = []
@@ -326,7 +333,7 @@ def anr_problems(include_ignored=False):
         task = p.get('事项', '')
         tst, done = _ar_done_at(task) if task else (None, '')
         again = sum(s.get('次数', 1) for s in ss if done and (s.get('发生时间') or s['加入时间']) > done)
-        out.append({'编号': pid, '类型': last['类型'], '标题': last['标题'], '原因': last.get('原因', ''),
+        out.append({'编号': pid, '类型': last['类型'], '标题': p.get('标题') or last['标题'], '原因': last.get('原因', ''),
                     '次数': sum(s.get('次数', 1) for s in ss), '样本数': len(ss),
                     '版本': sorted({s['版本'] for s in ss if s.get('版本')}, key=lambda v: [int(x) if x.isdigit() else 0 for x in re.split(r'\D+', v)]),
                     '首次': ss[0].get('发生时间') or ss[0]['加入时间'], '最近': last.get('发生时间') or last['加入时间'],
@@ -387,6 +394,8 @@ def _ar_task_name(p):
         parts = ['ANR', a or p['标题']]
     elif p['类型'] == 'Java崩溃':
         parts = ['崩溃', a, p['标题'].split(' · ')[0]]
+    elif p['类型'] == '手动':
+        parts = ['崩溃', p['标题']]
     else:
         parts = ['Native崩溃', a or p['标题']]
     parts = [re.sub(r'[（(].*$', '', x).strip() for x in parts if x]

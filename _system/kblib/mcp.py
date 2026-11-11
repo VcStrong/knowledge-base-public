@@ -30,6 +30,8 @@ from .fixlink import _conflict_hint, fix_link
 from .bugs.index import ZT_OWNER, bug_assign, bug_get, bug_list, bug_sync
 from .bugs.analysis import bug_analysis
 from .bugs.fix import bug_fixed
+from .talk import take_session_msgs
+from .builds import builds_text
 from .anr.store import anr_add, anr_link, anr_list, anr_mapping, anr_set_version, anr_show
 
 
@@ -86,7 +88,9 @@ INSTRUCTIONS = """本地知识库（按「期」管理需求 / 设计图 / 接�
    问题要处理时用 kb_anr_link 建 / 关联「ANR/崩溃」事项（或 kb_anr_add 时直接带 task）；排查时 kb_anr 看合并后的堆栈和样本原文，先 kb_search 找以前的结论。
 14. 工具插件：用户装了按需调用的插件（如按会话编号拉取外部系统里的会话）。用户给出插件能处理的东西（如 resume=会话编号）时，
    先 kb_plugin_call 不带参数看有哪些插件、各要什么参数，再带参数调用；结果以插件输出为准。
-   外部系统的内容只做索引：推动解决时建 / 关联事项，用 kb_add_note 记下来源（编号、地址、一句话简介），不要把整段原文存进知识库，处理时重新调用插件拉最新内容。"""
+   外部系统的内容只做索引：推动解决时建 / 关联事项，用 kb_add_note 记下来源（编号、地址、一句话简介），不要把整段原文存进知识库，处理时重新调用插件拉最新内容。
+15. 构建：挂了构建插件（如 Jenkins）时，每一期按分支对应构建任务。要测试包、对版本号、找某次构建的提交或 mapping 时用 kb_builds 查，不要自己猜地址；
+   只读，不要触发构建。崩溃日志版本没有 mapping 时，kb_builds 里同版本构建的 mapping 地址可以下载后用 kb_anr_mapping 归档。"""
 
 S = lambda **props: {'type': 'object', 'properties': props}
 STR = lambda d: {'type': 'string', 'description': d}
@@ -220,6 +224,9 @@ TOOLS = [
      S(id=STR('问题编号（8 位）'), query=STR('关键词'), task=STR('只看关联到这个事项的')), []),
     ('kb_anr_mapping', '按版本归档 ProGuard / R8 的 mapping.txt，并用它重算这个版本已归档的样本（还原混淆，签名可能合并）。',
      S(version=STR('版本号，如 5.32.1'), path=STR('mapping.txt 的绝对路径')), ['version', 'path']),
+    ('kb_builds', '这一期（事项）在构建平台（如 Jenkins）上的构建：任务、每次构建的结果、完整版本、提交、安装包和 mapping 地址、这个包上报的 Bug。'
+                  '找测试包装机、对版本、给 ANR / 崩溃取 mapping 时用；只读，不触发构建。',
+     S(iteration=STR('期 / 事项名'), count={'type': 'integer', 'description': '每个任务取几次构建（默认 5）'}), ['iteration']),
     ('kb_plugin_call', '调用按需「工具」插件（用户自己装的，如按会话编号拉取外部系统的会话内容）。不带 plugin = 列出可用插件和参数说明。'
                        '插件需要的账号由知识库从基础信息交给插件，不要自己找密码。',
      S(plugin=STR('插件 id（先不带参数调用一次看有哪些）'), args={'type': 'array', 'items': {'type': 'string'}, 'description': '传给插件的参数'},
@@ -270,6 +277,8 @@ def call_tool(name, a):
     res = _call_tool(name, a)
     if a.get('iteration') and name not in _NOTICED and isinstance(res, str):
         res += take_notices(a['iteration'])
+    if isinstance(res, str):
+        res += take_session_msgs()          # Bug 分析 / 修复会话：用户在期页面发给它的消息
     return res
 
 
@@ -345,6 +354,8 @@ def _call_tool(name, a):
         return anr_show(g('id')) if g('id') else anr_list(g('query') or '', g('task') or '')
     if name == 'kb_anr_mapping':
         return anr_mapping(g('version'), g('path'))
+    if name == 'kb_builds':
+        return builds_text(g('iteration'), int(g('count') or 5))
     if name == 'kb_plugin_call':
         return call_plugin(g('plugin') or '', g('args') or [], g('iteration') or '')
     if name == 'kb_anr_link':

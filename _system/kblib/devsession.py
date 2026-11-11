@@ -17,6 +17,7 @@ from .engines import engine_bin, engine_popen, period_engine
 from .plugins import _sources_prompt, run_plugins
 from .devprep import _dev_target, _git, _git_root, _no_flow_msg, _sdd_repo
 from . import lazy
+_talk = lazy('kblib.talk')
 _devices = lazy('kblib.devices')      # 上层模块：用到时才 import（不形成循环）
 
 
@@ -273,6 +274,19 @@ def _dev_finish(name, code=None):
             return
         except (KBError, OSError, KeyError) as e:
             log(d, '对话', f'打断后续跑失败：{e}')
+    left = _pending_chat(m)
+    if left and not s.get('停止中'):      # 这一轮结束时还有没送到的补充：带着它接着这次对话做，不让补充落空
+        for x in left:
+            x.update(状态='已送达', 送达时间=now())
+        save_meta(d, m)
+        try:
+            _dev_spawn(d, Path(s['仓库']), s.get('分支', ''), _chat_prompt('\n'.join(x['内容'] for x in left), True),
+                       _session_id(s.get('日志', '')), 续跑次数=s.get('续跑次数', 0), 仅对话=s.get('仅对话', False))
+            log(d, '对话', f'会话这一轮结束时还有 {len(left)} 条补充没送到，已带着它接着做')
+            return
+        except (KBError, OSError, KeyError) as e:
+            log(d, '对话', f'带着补充续跑失败：{e}')
+        m = load_meta(d)
     if code is None and res.get('结果') is not None and not res.get('出错'):
         code = 0       # 不是本进程启动的（服务重启后接管），拿不到退出码：日志里有正常结果就当正常退出
     why = _want_resume(d, m, s, code, res)
@@ -305,17 +319,21 @@ def _dev_finish(name, code=None):
         + (f'；{why}' if why else ''))
     _after_session(d, s)
     _notify(f'知识库 · {d.name}', '后台开发会话已结束' + ('（有错误）' if code else ''))
+    try:
+        _talk.talk_queue_tick(d.name)          # 排队的跟进内容：会话都结束了就开始处理
+    except Exception as e:
+        log(d, '排队处理', f'出错：{e}')
 
 
 # ---- 网页对话：开发面板「最近动作」下的输入框，遇到问题直接跟后台 AI 说
 def _pending_chat(m):
-    return [x for x in m.get('对话') or [] if x['状态'] == '待送达']
+    return [x for x in m.get('对话') or [] if x['状态'] == '待送达' and x.get('会话', 'dev') == 'dev']   # an:… 是发给 Bug 会话的
 
 
 def _take_chat(d, m):
     """把排队的消息交给正在运行的后台会话（附在它下一次调用知识库工具的结果后面）。m 由调用方保存。"""
-    if os.environ.get('KB_PERIOD', d.name) != d.name:
-        return ''
+    if os.environ.get('KB_PERIOD', d.name) != d.name or os.environ.get('KB_SESSION', 'dev') != 'dev':
+        return ''        # 同一期的 Bug 修复会话也带着 KB_PERIOD，靠 KB_SESSION 区分
     xs = _pending_chat(m)
     if not xs:
         return ''
@@ -469,7 +487,7 @@ def _dev_spawn(d, root, branch, prompt, resume_id='', **extra):
     (d / DEV_DIR).mkdir(exist_ok=True)
     ts = f'{datetime.now():%Y%m%d-%H%M%S}'
     logf = d / DEV_DIR / f'{ts}.jsonl'
-    proc = engine_popen(eng, prompt, f'kb·{d.name}', logf, root, resume_id, _dev_env(d.name, branch, root))
+    proc = engine_popen(eng, prompt, f'kb·{d.name}', logf, root, resume_id, dict(_dev_env(d.name, branch, root), KB_SESSION='dev'))
     _PROCS[d.name] = proc
     m = load_meta(d)
     old = m.get('开发会话') or {}
