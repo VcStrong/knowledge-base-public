@@ -19,7 +19,7 @@ _bug_index = lazy('kblib.bugs.index')      # 上层模块：用到时才 import�
 
 
 # 插件不是知识库的一部分：放在知识库根目录「插件/<名称>/」（不进 git），或在设置里添加其他目录。
-# 每个插件一个 plugin.json（名称、说明、命令、默认时机、识别文件、超时、配置项），在网页「⚙ 设置 → 插件」挂载并选时机。
+# 每个插件一个 plugin.json（名称、说明、命令、默认时机、识别文件、超时、配置项、提交说明＝手动「运行一次」后提交用的说明），在网页「⚙ 设置 → 插件」挂载并选时机。
 # 运行时 cwd 是插件目录，环境变量带上期名、仓库、分支、文档目录和配置；退出码非 0 算失败（记成非阻断问题，不拦截开发）。
 PLUGIN_DIR = ROOT / '插件'
 PLUGIN_EVENTS = {'开发开始': '网页点「开始开发 / 继续开发」后、启动后台 AI 之前',
@@ -311,7 +311,7 @@ def run_plugins(event, d, root='', branch='', docs='', only=''):
             res.append(f'插件「{name}」没有运行：{p["错误"]}')
             continue
         if not root or not Path(root).is_dir():
-            res.append(f'插件「{name}」没有运行：这一期还没有确定代码仓库')
+            res.append(f'插件「{name}」没有运行：{"这一期" if d else ""}还没有确定代码仓库')
             continue
         root = Path(root)
         miss = [x for x in p.get('识别文件', []) if not (root / x).exists()]
@@ -321,7 +321,7 @@ def run_plugins(event, d, root='', branch='', docs='', only=''):
             continue
         before = _git_changed(root)
         try:
-            env = _plugin_env(p, f'插件 {event}', KB_EVENT=event, KB_PERIOD=d.name, KB_PERIOD_DIR=str(d), KB_REPO=str(root),
+            env = _plugin_env(p, f'插件 {event}', KB_EVENT=event, KB_PERIOD=d.name if d else '', KB_PERIOD_DIR=str(d or ''), KB_REPO=str(root),
                               KB_BRANCH=branch or '', KB_DOCS=str(docs or ''))
         except KBError as e:
             res.append(f'插件「{name}」没有运行：{e}')
@@ -340,8 +340,9 @@ def run_plugins(event, d, root='', branch='', docs='', only=''):
         changed = sorted(f for f in set(before) | set(after) if before.get(f) != after.get(f))
         head = (f'插件「{name}」（{event}）{"完成" if ok else "失败"}，用时 {time.time() - t0:.0f} 秒，'
                 + (f'仓库 {root.name} 有 {len(changed)} 个文件改动' if changed else '没有文件改动'))
-        log(d, '插件', f'{head}：{out[-1500:]}')
-        if not ok:
+        if d:
+            log(d, '插件', f'{head}：{out[-1500:]}')
+        if not ok and d:
             _devices._add_issue(d, f'插件「{name}」运行失败（{event}）', out[-2000:], kind='工具链', source='插件',
                        key=f'插件:{p["id"]}:{event}')
         res.append(head + (f'\n{out[-3000:]}' if out else ''))

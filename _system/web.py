@@ -129,7 +129,7 @@ def api_overview():
                         'pendingQ': sum(1 for q in m.get('待确认') or [] if q['状态'] == '待回答'),
                         'issues': sum(1 for q in m.get('非阻断问题') or [] if q['状态'] == '待处理'),
                         'retest': bool(m.get('待复测')), 'autoRetest': bool((m.get('待复测') or {}).get('自动')),
-                        'dnd': bool(m.get('免打扰')),
+                        'dnd': bool(m.get('免打扰')), 'navHidden': (m.get('侧栏') or {}).get('状态') == '隐藏',
                         'kind': '事项' if kb.is_task(m) else '期', 'taskKind': m.get('事项类型', ''),
                         'priority': m.get('优先级', ''), 'from': m.get('来自', ''),
                         'running': (kb.dev_session(n) or {}).get('状态') == '运行中',
@@ -144,8 +144,14 @@ def api_overview():
         if e['状态'] == '激活' and (e.get('修复') or {}).get('状态') != '已修复':
             n = (e.get('归属') or {}).get('名称')
             open_by[n] = open_by.get(n, 0) + 1
+    try:
+        tb = kb.task_batches()
+    except Exception:
+        tb = {}
     for p in periods:
         p['openBugs'] = open_by.get(p['name'], 0)
+        if p['name'] in tb:
+            p['batch'] = tb[p['name']]
     for p in periods:
         p['bugs'] = sum(1 for e in zb if (e.get('归属') or {}).get('名称') == p['name'])
     zentao = {'open': len(zb), 'pending': sum(1 for e in zb if (e.get('归属') or {}).get('类型') == '待归纳')}
@@ -429,6 +435,10 @@ class H(BaseHTTPRequestHandler):
             return self._guard(lambda: kb.bug_analysis_view(q.get('id', '')))
         if u.path == '/api/zentao/sessions':
             return self._guard(lambda: {'items': list(reversed(kb.an_sessions()))[:20]})
+        if u.path == '/api/plugin/targets':
+            return self._guard(kb.plugin_targets)
+        if u.path == '/api/plugin/job':
+            return self._guard(lambda: kb.plugin_job(q.get('id', '')))
         if u.path == '/api/anr':
             return self._guard(kb.anr_json)
         if u.path == '/api/zentao':
@@ -441,6 +451,10 @@ class H(BaseHTTPRequestHandler):
             return self._guard(lambda: {'items': kb.plugin_resolve(q.get('id', ''), q.get('q', ''))})
         if u.path == '/api/plugin/content':
             return self._guard(lambda: kb.plugin_content(q.get('id', ''), q.get('item', ''), q.get('fresh') == '1'))
+        if u.path == '/api/task/memo':
+            return self._guard(lambda: kb.task_memo(q.get('name', '')))
+        if u.path == '/api/repos/choices':
+            return self._guard(lambda: {'items': kb.repo_choices()})
         if u.path == '/api/period/builds':
             return self._guard(lambda: kb.period_builds(q.get('name', ''), fresh=q.get('fresh') == '1'))
         if u.path == '/api/period/talk':
@@ -536,7 +550,7 @@ class H(BaseHTTPRequestHandler):
                       '/api/settings/flow/delete', '/api/settings/default', '/api/period/flow', '/api/settings/flow/draft',
                       '/api/engine', '/api/engine/delete', '/api/engine/default', '/api/engine/link', '/api/engine/test',
                       '/api/period/engine', '/api/retest', '/api/retest/plan', '/api/issue', '/api/device', '/api/dev/chat',
-                      '/api/plugin', '/api/plugin/dir', '/api/plugin/remove', '/api/plugin/run', '/api/plugin/task', '/api/task/push', '/api/period/delete', '/api/period/say',
+                      '/api/plugin', '/api/plugin/dir', '/api/plugin/remove', '/api/plugin/run', '/api/plugin/run2', '/api/plugin/task', '/api/task/push', '/api/task/item', '/api/task/nav', '/api/anr/batch', '/api/period/delete', '/api/period/say',
                       '/api/zentao/settings', '/api/bug/source', '/api/bug/test', '/api/zentao/analyze', '/api/zentao/review', '/api/zentao/fix',
                       '/api/zentao/fixed', '/api/zentao/unfix', '/api/anr/create', '/api/anr/mapping-url', '/api/period/builds', '/api/build/mapping', '/api/anr/automap') and not self._from_page():
             return self._send(403, {'error': '只能在知识库网页上由本人操作'})
@@ -556,6 +570,23 @@ class H(BaseHTTPRequestHandler):
         if u.path == '/api/plugin/task':
             return self._guard(lambda: kb.plugin_to_task(body.get('id', ''), body.get('item', ''), body.get('task', ''),
                                                          body.get('name', ''), body.get('title', ''), body.get('url', '')))
+        if u.path == '/api/task/nav':
+            return self._guard(lambda: {'msg': kb.task_nav(body.get('period', ''), bool(body.get('show')))})
+        if u.path == '/api/anr/batch':
+            return self._guard(lambda: {'msg': kb.anr_batch(body.get('ids') or [], body.get('task', ''), body.get('name', ''))})
+        if u.path == '/api/task/item':
+            def run():
+                p, k, act = body.get('period', ''), body.get('key', ''), body.get('action', '')
+                if act == 'add':
+                    return {'msg': kb.task_item_add(p, body.get('text', ''))}
+                if act == 'delete':
+                    return {'msg': kb.task_item_delete(p, k)}
+                if act == 'repo':
+                    return {'msg': '；'.join(kb._setup_task(p, '', body.get('text', ''), '用户（网页）')) or '没有变化'}
+                if act == 'push':
+                    return {'msg': kb.task_item_push(p, k, body.get('text', ''))}
+                return {'msg': kb.task_item_set(p, k, body.get('status', ''), body.get('text', ''), by='用户（网页）')}
+            return self._guard(run)
         if u.path == '/api/task/push':
             return self._guard(lambda: {'msg': kb.task_push(body.get('period', ''), body.get('text', ''))})
         if u.path == '/api/period/say':
@@ -637,6 +668,9 @@ class H(BaseHTTPRequestHandler):
             return self._guard(lambda: {'msg': kb.add_plugin_dir(body.get('path', ''))})
         if u.path == '/api/plugin/remove':
             return self._guard(lambda: {'msg': kb.remove_plugin_dir(body.get('id', ''))})
+        if u.path == '/api/plugin/run2':
+            return self._guard(lambda: {'job': kb.plugin_run_start(body.get('id', ''), body.get('target', ''), body.get('repo', ''),
+                                                                   body.get('push', True) is not False)})
         if u.path == '/api/plugin/run':
             return self._guard(lambda: {'msg': kb.run_plugin_now(body.get('id', ''), body.get('period', ''),
                                                                  body.get('event') or '开发开始')})
@@ -714,7 +748,9 @@ class H(BaseHTTPRequestHandler):
                 try:
                     return {'msg': kb.anr_create(body.get('text', ''), [f for f in files if f], body.get('title', ''),
                                                  body.get('version', ''), body.get('source', ''), body.get('task', ''),
-                                                 body.get('note', ''), body.get('mappingUrl', ''), mp or '')}
+                                                 body.get('note', ''), body.get('mappingUrl', ''), mp or '',
+                                                 task_name=body.get('taskName', ''), branch=body.get('branch', ''),
+                                                 repo=body.get('repo', ''))}
                 finally:
                     for i in (body.get('files') or []) + [body.get('mappingFile') or '']:
                         if re.fullmatch(r'[0-9a-f]{32}', i or ''):

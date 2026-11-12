@@ -40,6 +40,13 @@ a{color:var(--acc);text-decoration:none;cursor:pointer}
 .nav .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
 .nav .n{font-size:11px;background:rgba(255,255,255,.14);border-radius:999px;padding:0 7px;flex:none}
 .nav .n.w{background:var(--s4);color:#fff}.nav .n.b{background:#c92a2a;color:#fff}.nav .n.q{background:var(--s1);color:#fff}
+.combo{position:relative;display:flex;flex-wrap:wrap}.combo input{flex:1;border-top-right-radius:0;border-bottom-right-radius:0}.combo>button{border-top-left-radius:0;border-bottom-left-radius:0;margin-left:-1px;padding:0 14px;font-size:14px}
+.combo .dd{flex-basis:100%;background:var(--card);border:1px solid var(--line);border-radius:8px;max-height:260px;overflow:auto;box-shadow:0 6px 20px rgba(0,0,0,.12);margin-top:2px}
+.combo .ddi{padding:6px 10px;cursor:pointer}.combo .ddi:hover{background:var(--soft)}
+.navtg{color:var(--acc);cursor:pointer;margin-left:8px;flex:none}.navtg[data-show=""]{color:var(--mut);opacity:0;transition:opacity .15s}.pcard2:hover .navtg{opacity:1}
+.bcards{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}.bcard{border:1px solid var(--line,var(--soft));border-radius:8px;padding:8px 12px;min-width:180px}
+.plist.sub .nav{padding-left:26px;font-size:13px}.plist.sub .nav::before{content:"└";opacity:.4;margin-left:-14px;width:8px}
+.nav .x{display:none;flex:none;opacity:.6;padding:0 3px;font-size:12px}.nav:hover .x{display:inline}.nav:hover .x+.n,.nav .x:hover{opacity:1}
 .nav .d{width:7px;height:7px;border-radius:50%;flex:none;background:var(--s0)}
 .side .foot{margin-top:auto;font-size:12px;opacity:.75;padding:10px;display:flex;align-items:center;gap:6px}
 .mainc{min-width:0;display:flex;flex-direction:column}
@@ -263,7 +270,9 @@ button.danger{border-color:var(--warn);color:var(--warn)}
   <div class="plist" id="navPs"></div>
   <div class="navh">事项</div>
   <a class="nav" data-nav="/bugs" href="#/bugs" title="Bug 平台（禅道、Jira…）的 Bug：自动归到期，认不出的待归纳"><span class="t">🐞 Bug</span><span class="n" id="navBug"></span></a>
+  <div class="plist sub" id="navBugTs"></div>
   <a class="nav" data-nav="/anr" href="#/anr" title="ANR / 崩溃：按堆栈合并、计数、mapping 还原"><span class="t">💥 ANR / 崩溃</span><span class="n" id="navAnr"></span></a>
+  <div class="plist sub" id="navAnrTs"></div>
   <div id="navEnt"></div>
   <div class="plist" id="navTs"></div>
   <div class="navh">共用</div>
@@ -315,9 +324,16 @@ let navFold={};try{navFold=JSON.parse(localStorage.getItem('kb.navFold')||'{}')}
 function navAlerts(){document.querySelectorAll('.side .navh').forEach(h=>{const b=h.nextElementSibling;h.classList.toggle('alert',!!(b&&b.querySelector('.n.w:not(:empty),.n.q:not(:empty)')))})}
 function sideNav(d){
   if(d){periodNames=d.periods.filter(p=>p.kind!=='事项').map(p=>p.name);taskNames=d.periods.filter(p=>p.kind==='事项').map(p=>p.name);
-    const navItem=p=>`<a class="nav" data-nav="/p/${esc(p.name)}" href="#/p/${enc(p.name)}" title="${esc(p.name)} · ${esc(p.status)}"><span class="d" style="background:${DOT[p.status]||'var(--s0)'}"></span><span class="t">${esc(p.name)}</span>${p.pendingQ?`<span class="n q">${p.pendingQ}</span>`:''}${p.issues?`<span class="n w">${p.issues}</span>`:''}${p.openBugs?`<span class="n b" title="${p.openBugs} 个 Bug 没解决">🐞${p.openBugs}</span>`:''}</a>`;
-    $('#navPs').innerHTML=d.periods.filter(p=>p.kind!=='事项').map(navItem).join('');
-    $('#navTs').innerHTML=d.periods.filter(p=>p.kind==='事项'&&p.status!=='已完成'&&!(p.plugins||[]).length).map(navItem).join('')||'<span class="mut small" style="padding:4px 12px;display:block">没有进行中的事项</span>';
+    const navItem=p=>`<a class="nav" data-nav="/p/${esc(p.name)}" href="#/p/${enc(p.name)}" title="${esc(p.name)} · ${esc(p.status)}"><span class="d" style="background:${DOT[p.status]||'var(--s0)'}"></span><span class="t">${esc(p.name)}</span><span class="x" data-navx="${esc(p.name)}" title="从侧栏移除（在总览里可以加回）">✕</span>${p.pendingQ?`<span class="n q">${p.pendingQ}</span>`:''}${p.issues?`<span class="n w">${p.issues}</span>`:''}${p.openBugs?`<span class="n b" title="${p.openBugs} 个 Bug 没解决">🐞${p.openBugs}</span>`:''}</a>`;
+    const pv=d.periods.filter(p=>p.kind!=='事项'&&!p.navHidden),ph=d.periods.filter(p=>p.kind!=='事项'&&p.navHidden).length;
+    $('#navPs').innerHTML=pv.map(navItem).join('')+(ph?`<a class="nav" href="#/" title="在总览的期卡片上点「加到侧栏」"><span class="t mut small">已移出 ${ph} 期，在总览加回</span></a>`:'');
+    const bt=d.periods.filter(p=>p.kind==='事项'&&!(p.plugins||[]).length&&(p.batch?p.batch['侧栏']:p.status!=='已完成'));
+    const batchItem=p=>{const b=p.batch||{},nm=b['来源']==='anr'?batchName(p.name):p.name;
+      return `<a class="nav" data-nav="/p/${esc(p.name)}" href="#/p/${enc(p.name)}" title="${esc(p.name)} · ${esc(p.status)}${b['总数']?` · 已处理 ${b['已处理']}/${b['总数']}${b['待确认']?`，待确认 ${b['待确认']}`:''}`:''}"><span class="d" style="background:${DOT[p.status]||'var(--s0)'}"></span><span class="t">${esc(nm)}</span><span class="x" data-navx="${esc(p.name)}" title="从侧栏移除（在 ANR / 崩溃、总览里能找回；有新问题会自动回来）">✕</span>${p.pendingQ?`<span class="n q">${p.pendingQ}</span>`:''}${b['总数']?`<span class="n${b['待确认']?' q':''}">${b['已处理']}/${b['总数']}</span>`:''}${p.openBugs?`<span class="n b" title="${p.openBugs} 个 Bug 没解决">🐞${p.openBugs}</span>`:''}</a>`};
+    const src=k=>bt.filter(p=>((p.batch||{})['来源']||'')===k).map(batchItem).join('');
+    $('#navAnrTs').innerHTML=src('anr');$('#navBugTs').innerHTML=src('bug');
+    $('#navTs').innerHTML=src('');
+    document.querySelectorAll('[data-navx]').forEach(x=>x.onclick=e=>{e.preventDefault();e.stopPropagation();taskNav(x.dataset.navx,false)});
     $('#navPh').textContent=d.phones?`${d.phones.free}/${d.phones.total}`:'';
     const nb=$('#navBug');nb.textContent=d.zentao&&d.zentao.pending?d.zentao.pending:'';nb.title='待归纳（未关闭）';nb.classList.toggle('w',!!(d.zentao&&d.zentao.pending));
     entries=d.entries||[];ovPeriods=d.periods;
@@ -329,6 +345,8 @@ function sideNav(d){
   document.querySelectorAll('.side .nav').forEach(a=>{const k=a.dataset.nav;a.classList.toggle('on',k==='/'?hh==='/':k==='/d/'?hh.startsWith('/d/'):hh===k)});
   navAlerts();
 }
+const batchName=n=>n.replace(/^(ANR\s*\/\s*崩溃|ANR|崩溃)\s*/,'')||n;
+async function taskNav(name,show){try{const r=await post('/api/task/nav',{period:name,show});toast(r.msg+(show?'':'；在总览里可以加回'));await navRefresh();render()}catch(e){toast(e.message)}}
 async function navRefresh(){try{sideNav(await api('/api/overview'))}catch(_){}}
 
 async function overview(){
@@ -350,7 +368,7 @@ async function overview(){
       ${p.openBugs?`<span class="badge st-开发中" title="归到这一期、还没解决的 Bug（平台上激活、知识库也没标已修复）">🐞 ${p.openBugs} 个没解决</span>`:''}${p.retest?tag('st-收集中',`🔁 ${p.autoRetest?'等条件自动复测':'可复测'}`):''}${p.dnd?tag('st-收集中','🌙 免打扰'):''}
       ${p.sources?tag(p.pendingSources?'st-已暂停2':'st-收集中',`来源 ${p.sources}${p.pendingSources?' · '+p.pendingSources+' 待核对':' · 已核对'}`):''}
       ${p.staleSources?tag('st-已暂停2',`⚠ ${p.staleSources} 条原文有变化`):''}${p.imagesWithoutNote?tag('st-已暂停2',`${p.imagesWithoutNote} 张图无说明`):''}
-      <span class="lt">${p.lastLog?esc(p.lastLog.time):''}</span></div></a>`;
+      <span class="lt">${p.lastLog?esc(p.lastLog.time):''}</span><span class="small navtg" data-pnav="${esc(p.name)}" data-show="${p.navHidden?'1':''}">${p.navHidden?'＋ 加到侧栏':'移出侧栏'}</span></div></a>`;
   const ph=d.phones;
   app.innerHTML=`
   <div class="pagehead"><div><h1>总览</h1><p class="mut">按「期」管理需求、设计稿、接口文档和零散资料；资料齐了就在期里一键开始开发。</p></div>
@@ -375,6 +393,8 @@ async function overview(){
   app.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{ovFilter=b.dataset.f;try{localStorage.setItem('kb.ovFilter',ovFilter)}catch(_){}overview()});
   if($('#ovAdd'))$('#ovAdd').onclick=()=>addDlg();
   $('#ovTask').onclick=()=>addDlg('task');
+  app.querySelectorAll('[data-tnav]').forEach(a=>a.onclick=()=>taskNav(a.dataset.tnav,!!a.dataset.show));
+  app.querySelectorAll('[data-pnav]').forEach(a=>a.onclick=e=>{e.preventDefault();e.stopPropagation();taskNav(a.dataset.pnav,!!a.dataset.show)});
   const g=$('#ibGo');if(g)g.onclick=async()=>{try{const r=await post('/api/inbox',{period:$('#ibP').value});toast(r.msg);render()}catch(e){toast(e.message)}};
 }
 
@@ -405,7 +425,7 @@ const PRI_C={高:'st-已暂停2',中:'st-收集中',低:'st-已完成'};
 function taskTable(ts){
   if(!ts.length)return '<p class="mut">还没有事项。用户上报的 ANR、要加的埋点、线上问题……点「＋ 新建事项」，或在 🐞 Bug 页把待归纳的 Bug 归入事项。</p>';
   const open=ts.filter(t=>t.status!=='已完成'),done=ts.filter(t=>t.status==='已完成');
-  const row=t=>`<tr><td><a href="#/p/${enc(t.name)}"><b>${esc(t.name)}</b></a><div class="mut small">${esc(t.summary||'')}</div></td>
+  const row=t=>`<tr><td><a href="#/p/${enc(t.name)}"><b>${esc(t.name)}</b></a>${t.batch&&!(t.plugins||[]).length?` <a class="small mut" data-tnav="${esc(t.name)}" data-show="${t.batch['侧栏']?'':'1'}">${t.batch['侧栏']?'从侧栏移除':'加回侧栏'}</a>`:''}<div class="mut small">${esc(t.summary||'')}</div></td>
     <td><span class="badge st-收集中">${esc(t.taskKind||'其他')}</span></td><td><span class="badge ${PRI_C[t.priority]||''}">${esc(t.priority||'中')}</span></td>
     <td>${badge(t.status)}${t.running?' <span class="badge st-开发中">● 处理中</span>':''}${t.pendingQ?` <span class="badge st-已批准开发">🔔 ${t.pendingQ}</span>`:''}</td>
     <td>${t.bugs?`🐞 ${t.bugs}`:''}</td><td class="small mut">${esc(t.from||'')}</td><td class="small mut">${esc(t.lastLog?t.lastLog.time:t.created)}</td></tr>`;
@@ -668,9 +688,16 @@ function anrNewDlg(tasks,mapOnly){
     <div class="row" style="gap:10px;flex-wrap:wrap"><label class="small mut">版本 <input type="text" id="anV" value="${esc($('#arV')?$('#arV').value.trim():'')}" placeholder="可空，如 5.32.1" style="width:170px"></label>
       ${mapOnly?'':`<label class="small mut">来源 <input type="text" id="anS" value="${esc($('#arS')?$('#arS').value.trim():'')}" placeholder="如 用户反馈 vv号 123" style="width:190px"></label>
       <label class="small mut">事项 <select id="anK"><option value="">— 不关联 —</option><option value="＋新建">＋ 新建事项</option>${tasks.map(t=>`<option>${esc(t)}</option>`).join('')}</select></label>`}</div>
+    ${mapOnly?'':`<div id="anTk" hidden class="row" style="gap:10px;flex-wrap:wrap"><label class="small mut">事项名 <input type="text" id="anTN" placeholder="可空，自动取" style="width:200px"></label>
+      <label class="small mut">分支 <input type="text" id="anBr" placeholder="如 feature-xxx-stable" style="width:240px"></label>
+      <label class="small mut">代码仓库 <select id="anRp"><option value="">— 开始处理时再选 —</option></select></label></div>
+      <div class="small mut" id="anRpH" hidden>一次粘贴的几段日志都归到这一个事项；建好后到事项页点「▶ 开始开发」</div>`}
     ${mapBox}
     ${mapOnly?'':'<label>备注（可空）<input type="text" id="anN"></label>'}
     <div class="row"><button class="pri" id="anGo">${mapOnly?'归档':'建问题'}</button><span class="mut small">${mapOnly?'归档后会用它还原这个版本的样本；不写版本时存成「未标版本-时间」，给样本补上这个版本名即可还原':'认得出堆栈的按签名合并到已有问题、累计次数；版本、来源都可空，带 mapping 又没写版本时先从日志里认，认不出就和这次的日志共用一个版本名'}</span></div></div>`);
+  if($('#anK'))$('#anK').onchange=async()=>{const nw=$('#anK').value==='＋新建';$('#anTk').hidden=!nw;$('#anRpH').hidden=!nw;
+    if(nw&&$('#anRp').options.length<2){try{const r=await api('/api/repos/choices');
+      $('#anRp').innerHTML='<option value="">— 开始处理时再选 —</option>'+r.items.map(x=>`<option value="${esc(x['路径'])}">${esc(x['名称'])}　${esc(x['分支']||'')}${x['改动']?` · ${x['改动']} 个未提交改动`:''}${x['在用'].length?` · 正用于 ${esc(x['在用'].join('、'))}`:''}</option>`).join('')}catch(e){toast(e.message)}}};
   document.querySelectorAll('input[name=anM]').forEach(r=>r.onchange=()=>{const v=document.querySelector('input[name=anM]:checked').value;$('#anMF').hidden=v!=='file';$('#anMU').hidden=v!=='url'});
   $('#anGo').onclick=async()=>{const b=$('#anGo'),t=b.textContent;
     const mm=document.querySelector('input[name=anM]:checked').value,ver=$('#anV').value.trim();
@@ -682,20 +709,28 @@ function anrNewDlg(tasks,mapOnly){
         :await api('/api/anr/upload',{method:'POST',headers:{'X-Kind':'mapping','X-Version':enc(ver),'X-Filename':enc(mf.name)},body:mf})}
       else{const files=[];for(const f of $('#anF').files)files.push(await anrStage(f));
         r=await post('/api/anr/create',{title:$('#anT').value.trim(),text:$('#anX').value,files,version:ver,source:$('#anS').value.trim(),
-          task:$('#anK').value,note:$('#anN').value.trim(),mappingUrl:mu,mappingFile:mf?await anrStage(mf):''})}
+          task:$('#anK').value,note:$('#anN').value.trim(),mappingUrl:mu,mappingFile:mf?await anrStage(mf):'',
+          taskName:$('#anTN').value.trim(),branch:$('#anBr').value.trim(),repo:$('#anRp').value})}
       openDlg(mapOnly?'已归档 mapping':'已建问题',`<pre style="white-space:pre-wrap">${esc(r.msg)}</pre>`);anrPage()}
     catch(e){toast(e.message);b.disabled=false;b.textContent=t}};
 }
 async function anrPage(){
-  const d=await api('/api/anr');navRefresh();
+  const [d]=await Promise.all([api('/api/anr'),navRefresh()]);
   d.problems.forEach(p=>anrIndex[p['编号']]=p);
+  const bs=ovPeriods.filter(p=>p.kind==='事项'&&(p.batch||{})['来源']==='anr'),bOn=bs.filter(p=>p.batch['侧栏']),bOff=bs.filter(p=>!p.batch['侧栏']);
+  const bCard=p=>{const b=p.batch;return `<div class="bcard"><a href="#/p/${enc(p.name)}"><b>${esc(batchName(p.name))}</b></a> ${badge(p.status)}
+    <div class="small mut">已处理 ${b['已处理']}/${b['总数']}${b['待确认']?` · 待确认 ${b['待确认']}`:''}${p.running?' · AI 处理中':''}</div>
+    <a class="small mut" data-bnav="${esc(p.name)}" data-show="${b['侧栏']?'':'1'}">${b['侧栏']?'从侧栏移除':'加回侧栏'}</a></div>`};
   const todo=p=>p['状态']!=='忽略'&&(!p['事项']||p['修复后又出现']);
   const V={'待处理':todo,'已关联':p=>p['状态']!=='忽略'&&p['事项'],'忽略':p=>p['状态']==='忽略','全部':()=>true};
   const q=anrF.q.trim().toLowerCase();
   const list=d.problems.filter(V[anrF.v]||todo).filter(p=>!q||JSON.stringify(p).toLowerCase().includes(q));
   const on=k=>anrCols.includes(k);
-  const taskOpts=p=>`<select data-alink="${p['编号']}"><option value="">— 未关联 —</option><option value="＋新建">＋ 新建事项</option>${d.tasks.map(t=>`<option ${t===p['事项']?'selected':''}>${esc(t)}</option>`).join('')}</select>`;
-  app.innerHTML=`<div class="pagehead"><div><h1>💥 ANR / 崩溃</h1><p class="mut">把 traces、tombstone、崩溃日志、Bugly 导出、bugreport.zip 拖进来：按关键堆栈合并成「问题」并累计次数；有对应版本的 mapping 时自动还原混淆。要处理的问题建成「ANR/崩溃」事项。接入了崩溃平台（Sentry、Firebase Crashlytics、Bugly，在「🐞 Bug → ＋ 接入平台」）的，问题会自动同步进来，次数取平台上的累计值。</p></div></div>
+  const taskOpts=p=>`<select data-alink="${p['编号']}"><option value="">— 未关联 —</option><option value="＋新建">＋ 新建批次</option>${d.tasks.map(t=>`<option value="${esc(t)}" ${t===p['事项']?'selected':''}>${esc(batchName(t))}</option>`).join('')}</select>`;
+  app.innerHTML=`<div class="pagehead"><div><h1>💥 ANR / 崩溃</h1><p class="mut">把 traces、tombstone、崩溃日志、Bugly 导出、bugreport.zip 拖进来：按关键堆栈合并成「问题」并累计次数；有对应版本的 mapping 时自动还原混淆。勾选要处理的问题放进一个「批次」，到批次里逐条推动给 AI。接入了崩溃平台（Sentry、Firebase Crashlytics、Bugly，在「🐞 Bug → ＋ 接入平台」）的，问题会自动同步进来，次数取平台上的累计值。</p></div></div>
+  ${bs.length?`<div class="card2" style="margin-bottom:12px"><div class="bd"><b>批次</b> <span class="mut small">挑出来交给 AI 处理的一组问题；处理完可以从侧栏移除，有新问题会自动回来</span>
+    <div class="bcards">${bOn.map(bCard).join('')||'<span class="mut small">侧栏里没有批次</span>'}</div>
+    ${bOff.length?`<details style="margin-top:6px"><summary class="small mut">已移出侧栏 ${bOff.length} 个</summary><div class="bcards">${bOff.map(bCard).join('')}</div></details>`:''}</div></div>`:''}
   <div class="card2" style="margin-bottom:12px"><div class="bd">
     <div class="row" style="flex-wrap:wrap;gap:10px;margin-bottom:8px"><label class="small mut">版本 <input type="text" id="arV" placeholder="日志里认不出时填，如 5.32.1" style="width:180px"></label>
       <label class="small mut">来源 <input type="text" id="arS" placeholder="如 用户反馈 vv号 123 / Bugly" style="width:200px"></label></div>
@@ -706,13 +741,16 @@ async function anrPage(){
   <div class="fchips">${Object.keys(V).map(k=>`<button class="fchip ${k===anrF.v?'on':''}" data-av="${k}">${k}<b>${d.problems.filter(V[k]).length}</b></button>`).join('')}
     <input type="text" id="arQ" value="${esc(anrF.q)}" placeholder="筛选：类名、方法、原因…" style="margin-left:auto;width:220px"></div>
   <div class="row small mut" style="margin-bottom:6px;gap:10px">显示${ANR_COLS.map(([k,t])=>`<label class="row" style="gap:3px;color:var(--fg)"><input type="checkbox" data-acol="${k}" ${on(k)?'checked':''}>${t}</label>`).join('')}</div>
-  ${list.length?`<div class="tw"><table><tr><th style="width:84px">编号</th><th>问题</th><th style="width:70px">次数</th><th style="width:240px">事项</th></tr>${list.map(p=>`<tr>
+  ${list.length?`<div class="row small" id="arBulk" hidden style="gap:8px;margin-bottom:6px;padding:6px 10px;background:var(--soft);border-radius:8px">已选 <b id="arBN"></b> 个，放进
+    <select id="arBT"><option value="＋新建">＋ 新批次</option>${d.tasks.map(t=>`<option value="${esc(t)}">${esc(batchName(t))}</option>`).join('')}</select><button class="pri small" id="arBGo">放进去</button><a class="mut" id="arBX">取消</a></div>
+  <div class="tw"><table><tr><th style="width:28px"><input type="checkbox" id="arAll" title="全选"></th><th style="width:84px">编号</th><th>问题</th><th style="width:70px">次数</th><th style="width:240px">批次</th></tr>${list.map(p=>`<tr>
+    <td><input type="checkbox" data-asel="${p['编号']}"></td>
     <td><a data-ashow="${p['编号']}" class="mono">${p['编号']}</a></td>
     <td><a data-ashow="${p['编号']}"><b>${esc(p['标题'])}</b></a>${(p['平台']||[]).map(x=>` <a href="${esc(x['链接'])}" target="_blank" rel="noopener" class="badge" title="${esc(x['来源'])} 上累计 ${esc(x['次数'])} 次，影响 ${esc(x['用户数'])} 人">${esc(x['来源'])} ↗</a>`).join('')}${p['已还原']===false?' <span class="badge st-已暂停2" title="缺 mapping 或版本不明">未还原</span>':''}${p['状态']==='忽略'?' <span class="badge">忽略</span>':''}
       ${on('原因')&&p['原因']?`<div class="small">${esc(p['原因'])}</div>`:''}
       ${on('详情')?`<div class="mut small"><span class="badge ${ANR_K[p['类型']]||''}">${esc(p['类型'])}</span> 版本 ${esc(p['版本'].join('、')||'不明')} · 首次 ${esc(p['首次'].slice(0,16))} · 最近 ${esc(p['最近'].slice(0,16))}</div>`:''}</td>
     <td><b>${p['次数']}</b>${p['样本数']!==p['次数']?`<div class="mut small">${p['样本数']} 份日志</div>`:''}</td>
-    <td>${p['事项']?`<a href="#/p/${enc(p['事项'])}">${esc(p['事项'])}</a> ${badge(p['事项状态'])}${p['修复后又出现']?`<div class="small" style="color:var(--s4)">⚠ 完成后又出现 ${p['修复后又出现']} 次</div>`:''}`:taskOpts(p)}</td></tr>`).join('')}</table></div>`
+    <td>${p['事项']?`<a href="#/p/${enc(p['事项'])}">${esc(batchName(p['事项']))}</a> ${badge(p['事项状态'])}${p['修复后又出现']?`<div class="small" style="color:var(--s4)">⚠ 完成后又出现 ${p['修复后又出现']} 次</div>`:''}`:taskOpts(p)}</td></tr>`).join('')}</table></div>`
     :`<p class="mut">${d.problems.length?'这里没有问题。':'还没有 ANR / 崩溃日志。'}</p>`}`;
   const save=()=>{try{localStorage.setItem('kb.anrF',JSON.stringify(anrF))}catch(_){}};
   app.querySelectorAll('[data-av]').forEach(b=>b.onclick=()=>{anrF.v=b.dataset.av;save();anrPage()});
@@ -720,6 +758,15 @@ async function anrPage(){
   app.querySelectorAll('[data-acol]').forEach(c=>c.onchange=()=>{const k=c.dataset.acol;anrCols=c.checked?[...new Set([...anrCols,k])]:anrCols.filter(x=>x!==k);try{localStorage.setItem('kb.anrCols',JSON.stringify(anrCols))}catch(_){}anrPage()});
   app.querySelectorAll('[data-ashow]').forEach(a=>a.onclick=()=>anrDlg(a.dataset.ashow,d.tasks));
   app.querySelectorAll('[data-alink]').forEach(sel=>sel.onchange=()=>anrLink(sel.dataset.alink,{task:sel.value}));
+  app.querySelectorAll('[data-bnav]').forEach(a=>a.onclick=()=>taskNav(a.dataset.bnav,!!a.dataset.show));
+  const sels=()=>[...app.querySelectorAll('[data-asel]:checked')].map(c=>c.dataset.asel);
+  const bulk=()=>{const n=sels().length;if($('#arBulk')){$('#arBulk').hidden=!n;$('#arBN').textContent=n}};
+  app.querySelectorAll('[data-asel]').forEach(c=>c.onchange=bulk);
+  if($('#arAll')){$('#arAll').onchange=()=>{app.querySelectorAll('[data-asel]').forEach(c=>c.checked=$('#arAll').checked);bulk()};
+    $('#arBX').onclick=()=>{app.querySelectorAll('[data-asel],#arAll').forEach(c=>c.checked=false);bulk()};
+    $('#arBGo').onclick=async()=>{const ids=sels(),t=$('#arBT').value;let name='';
+      if(t==='＋新建'){name=prompt('新批次叫什么？',`ANR 第${bs.length+1}批`);if(name===null)return}
+      try{const r=await post('/api/anr/batch',{ids,task:t,name});toast(r.msg);anrPage()}catch(e){toast(e.message)}}}
   const send=async(files,kind,ver)=>{for(const f of files){toast(`上传 ${f.name}…`);
     try{const r=await api('/api/anr/upload',{method:'POST',headers:{'X-Kind':kind,'X-Version':enc(ver||''),'X-Source':enc($('#arS').value.trim()),'X-Filename':enc(f.name)},body:f});
       openDlg(kind==='mapping'?'已归档 mapping':`已归档 ${f.name}`,`<pre style="white-space:pre-wrap">${esc(r.msg)}</pre>`)}catch(e){toast(e.message)}}
@@ -764,6 +811,7 @@ async function period(name){
   if(!periodNames.length){try{sideNav(await api('/api/overview'))}catch(_){}}
   const isTask=m['类型']==='事项';
   if(isTask&&(m['外部来源']||[]).length&&!fullView[d.name])return pushPage(d);
+  if(isTask&&!fullView[d.name])return memoPage(d.name);
   const hist=m['状态历史']||[];
   const lastAt=s=>{for(let i=hist.length-1;i>=0;i--)if(hist[i]['状态']===s)return hist[i]['时间'];return''};
   const flow=['收集中','已批准开发','开发中','已完成'], ci=flow.indexOf(m['状态']);
@@ -804,7 +852,7 @@ async function period(name){
   let tab=(ptabs[d.name]==='src'?'mat':ptabs[d.name])||(m['开发会话']||['已批准开发','开发中','已完成'].includes(m['状态'])?'dev':'mat');
   const branches=Object.values(d.notes).flat().filter(n=>n['类型']==='分支');
   const pend=(m['来源']||[]).filter(x=>x['核对']!=='已核对').length;
-  app.innerHTML=`<div class="pagehead"><div style="min-width:0"><div class="crumb"><a href="#/">总览</a> / ${isTask?'事项':'期'}${(m['外部来源']||[]).length?' · <a id="toPush">← 回到原始内容</a>':''}</div>
+  app.innerHTML=`<div class="pagehead"><div style="min-width:0"><div class="crumb"><a href="#/">总览</a> / ${isTask?(((ovPeriods.find(p=>p.name===name)||{}).batch||{})['来源']==='anr'?'<a href="#/anr">💥 ANR / 崩溃</a> / 批次':'事项'):'期'}${(m['外部来源']||[]).length?' · <a id="toPush">← 回到原始内容</a>':''}</div>
       <h1>${esc(d.name)} ${badge(m['状态'])}${isTask?` <span class="badge st-收集中">${esc(m['事项类型']||'其他')}</span> <span class="badge ${PRI_C[m['优先级']]||''}">优先级 ${esc(m['优先级']||'中')}</span>`:''}</h1><div class="mut">${esc(m['说明']||'')}${isTask&&m['来自']?`　<span class="small">来自：${esc(m['来自'])}</span>`:''}${isTask?` <a class="small" id="tkEdit">✎ 编辑</a>`:''}</div>
       <div class="pmeta">${branches.length?`<span>🌿 开发分支 ${branches.map(n=>`<b class="mono">${esc(noteTitle(n))}</b>`).join('；')}</span>`:''}
         ${m['开发仓库']?`<span>仓库 <span class="mono">${esc(m['开发仓库'].replace(/^\/Users\/[^/]+/,'~'))}</span></span>`:''}
@@ -1168,14 +1216,15 @@ async function talkBox(name){
   const sel=$('#tkSel'),k=mode!=='insert'?'':sel?sel.value:ss.length?ss[0]['键']:'',toDev=k==='dev'||(k==='all'&&ss.some(x=>x['键']==='dev'));
   $('#tkIntL').hidden=!toDev;
   const q=v['排队']?`（已有 ${v['排队']} 条在排队）`:'';
-  $('#tkHint').textContent=mode==='push'?(v['状态']==='收集中'?'没有会话在跑，这一期还在收集中：发送的内容记进「需求」文字资料'
+  $('#tkHint').textContent=mode==='push'&&v['事项']?'没有会话在跑：发送后 AI 接着上次的上下文继续（如编译校验、提交），不走开发流程，要改代码会先问你'
+    :mode==='push'?(v['状态']==='收集中'?'没有会话在跑，这一期还在收集中：发送的内容记进「需求」文字资料'
       :'没有会话在跑：发送后 AI 接着这一期上次的会话（保留上下文）按内容推动解决，要改代码按本期开发约定改、自测、提交，有取舍会先问你'+q)
     :mode==='new'?'另起一个新会话并行执行（不接上次的上下文）；和正在跑的会话改同一个仓库时，它只改、只提交自己需要的文件'
     :mode==='queue'?'先记下，这一期正在跑的会话都结束后，自动接着上次的会话按顺序处理'+q
     :toDev&&!$('#tkWait').checked?'立即插入：中止开发会话正在跑的这一步（如编译、测试命令），带着你的补充接着这次对话做'+(k==='all'?'；其他会话下次调用知识库工具时收到':'')
     :toDev?'这一步做完、下次调用知识库工具时收到（等你确认时立刻收到）；这一轮结束还没送到的，会带着它接着做，不会落空'
     :'Bug 分析 / 修复、新会话不能打断：下次调用知识库工具时收到';
-  $('#tkMsgs').innerHTML=(v['对话']||[]).slice(-4).map(x=>`<div class="msg">🧑 ${esc(x['时间'])} · ${esc(x['目标']||x['方式'])} · ${x['状态']==='待送达'?'<span style="color:var(--s1)">等会话下次调用知识库工具时送达</span>':x['状态']==='排队中'?'<span style="color:var(--s1)">排队中：会话都结束后处理</span>':esc({推动解决:'已开始推动',新会话执行:'已启动新会话'}[x['方式']]||(x['方式']==='打断'?'已插入':'已送达'))}　<b>${esc(x['内容'])}</b></div>`).join('');
+  $('#tkMsgs').innerHTML=(v['对话']||[]).slice(-4).map(x=>`<div class="msg">🧑 ${esc(x['时间'])} · ${esc(x['目标']||x['方式'])} · ${x['状态']==='待送达'?'<span style="color:var(--s1)">等会话下次调用知识库工具时送达</span>':x['状态']==='排队中'?'<span style="color:var(--s1)">排队中：会话都结束后处理</span>':esc({推动解决:'已开始推动',新会话执行:'已启动新会话'}[x['方式']]||(x['方式']==='打断'?'已插入':'已送达'))}　<b title="${esc(x['内容'])}">${esc(x['显示']||(x['内容'].split('\n')[0].length>120||x['内容'].includes('\n')?x['内容'].split('\n')[0].slice(0,120)+'…':x['内容']))}</b></div>`).join('');
   const gs=v['动作'],box=$('#tkActs'),D=$('#tkActD');
   $('#tkActN').textContent=gs.length?`（${gs.length} 个会话${gs.some(g=>g['运行中'])?'，有会话在跑':''}）`:'（暂无）';
   if(!D.dataset.init){D.dataset.init=1;D.open=gs.some(g=>g['运行中'])}
@@ -1433,6 +1482,70 @@ function showCands(id,items){
     $('#ctGo').onclick=async()=>{try{const r=await post('/api/plugin/task',{id,item:x['编号'],task:$('#ctT').value,name:$('#ctN').value.trim(),title:x['标题'],url:''});
       dlg.close();toast(r.msg);location.hash='#/p/'+enc(r.name)}catch(e){toast(e.message)}}});
 }
+// ---------------- 事项：记事本样式。一组条目，每条单独「推动」给 AI；分支、工程等放「补充」
+const ITEM_ICON={待处理:['○','var(--mut)'],推动中:['●','var(--s1)'],已解决:['✓','var(--s3,#2f9e44)'],没解决:['✗','var(--s4)'],待确认:['?','var(--s1)']};
+async function memoPage(name){
+  if(!ovPeriods.length)await navRefresh();
+  let v;try{v=await api('/api/task/memo?name='+enc(name))}catch(e){app.innerHTML=`<p class="mut">${esc(e.message)}</p>`;return}
+  const its=v['条目'],done=its.filter(x=>x['状态']==='已解决').length;
+  const sup=v['补充'].map(n=>`<li><span class="mut small">${n['类型']==='分支'?'分支':n['类型']==='链接'?'链接':''}</span> ${n['类型']==='分支'?`<b class="mono">${esc(n['内容'])}</b>`:esc(n['内容'])} <a class="mut small" data-sdel="${esc(n['编号'])}">删除</a></li>`).join('');
+  const ob=(ovPeriods.find(p=>p.name===name)||{}).batch||{},srcC=ob['来源']==='anr'?'<a href="#/anr">💥 ANR / 崩溃</a> / 批次':ob['来源']==='bug'?'<a href="#/bugs">🐞 Bug</a> / 事项':'事项';
+  app.innerHTML=`<div class="pagehead"><div style="min-width:0"><div class="crumb"><a href="#/">总览</a> / ${srcC}</div>
+      <h1>${esc(name)} ${badge(v['状态'])}</h1>
+      <div class="small mut">${esc(v['事项类型'])} · 优先级 ${esc(v['优先级']||'中')}${v['说明']?' · '+esc(v['说明']):''}　<a id="mmFull">完整页面</a>　<a id="mmNav" data-show="${ob['侧栏']===false?'1':''}">${ob['侧栏']===false?'加回侧栏':'从侧栏移除'}</a>　<a id="mmDel" style="color:var(--s4)">删除</a></div></div></div>
+    <div class="card2 talk" style="margin-bottom:12px"><div class="bd">
+      <textarea id="tkMsg" rows="2" placeholder="接着刚才的上下文说：如「编译校验一下」「把刚才的改动提交」。Cmd+Enter 发送">${esc(drafts['tk:'+name]||'')}</textarea>
+      <div class="ctl"><button class="pri" id="tkSend">发送</button><span id="tkMode" class="small row" hidden>
+        <label class="row"><input type="radio" name="tkM" value="insert" checked> 插入当前会话</label>
+        <label class="row"><input type="radio" name="tkM" value="new"> 启动新会话执行</label>
+        <label class="row"><input type="radio" name="tkM" value="queue"> 排队处理</label></span>
+        <span id="tkTo" class="small"></span>
+        <label class="small row" id="tkIntL" style="color:var(--fg)" hidden><input type="checkbox" id="tkWait"> 等这一步做完再插入</label></div>
+      <div class="mut small" id="tkHint" style="margin-top:4px"></div>
+      <div class="chat" id="tkMsgs"></div>
+      <details id="tkActD" style="margin-top:6px"><summary class="small"><b>最近动作</b> <span class="mut" id="tkActN"></span>　<a id="tkAll">查看全部记录</a></summary><div class="act" id="tkActs"></div></details>
+    </div></div>
+    <div class="card2" style="margin-bottom:12px"><div class="bd"><b>补充</b>
+      <ul class="memo" style="margin:6px 0 8px;padding-left:18px">
+        <li><span class="mut small">工程</span> <select id="mmRepo"><option value="">${v['工程']?esc(v['工程']):'— 未选 —'}</option></select></li>${sup}</ul>
+      <div class="row" style="gap:6px"><input type="text" id="mmSup" placeholder="补充一条：分支、工程路径、账号、注意事项…（回车）" style="flex:1"></div></div></div>
+    <div class="card2"><div class="bd"><div class="row" style="justify-content:space-between"><b>条目 <span class="mut small">${its.length} 条${done?`，已解决 ${done}`:''}</span></b></div>
+      <div class="row" style="gap:6px;margin:8px 0"><input type="text" id="mmAdd" placeholder="记一条…（回车）" style="flex:1"></div>
+      ${its.map(x=>{const ic=ITEM_ICON[x['状态']]||ITEM_ICON['待处理'];return `<div class="mitem" style="display:flex;gap:10px;padding:8px 0;border-top:1px solid var(--soft)">
+        <span title="${esc(x['状态'])}" style="color:${ic[1]};font-weight:700;width:16px">${ic[0]}</span>
+        <div style="flex:1;min-width:0"><div>${x['类型']!=='记录'?`<span class="badge">${esc(x['类型'])}</span> `:''}${x['类型']==='Bug'&&x['链接']?`<a href="${esc(x['链接'])}" target="_blank" rel="noopener">${esc(x['编号'])}</a> `:''}${x['键'].startsWith('anr:')?`<a data-manr="${esc(x['编号'])}">${esc(x['标题'].replace(/^ANR · /,''))}</a>`:esc(x['标题'])}</div>
+          ${x['内容']&&x['内容']!==x['标题']?`<div class="small mut">${esc(x['内容'].slice(0,200))}</div>`:''}
+          ${x['结论']?`<div class="small" style="margin-top:2px">→ ${esc(x['结论'])} <span class="mut">${esc(x['结论时间']||'')}</span></div>`:''}</div>
+        <div class="row" style="gap:6px;align-self:flex-start">${x['状态']==='推动中'?'<span class="small mut">推动中…</span>':`<button class="small" data-mpush="${esc(x['键'])}">推动</button>`}
+          ${x['状态']==='已解决'?`<a class="small mut" data-mset="${esc(x['键'])}" data-st="待处理">重开</a>`:`<a class="small mut" data-mset="${esc(x['键'])}" data-st="已解决">标已解决</a>`}
+          ${x['类型']==='记录'?`<a class="small mut" data-mdel="${esc(x['键'])}">删除</a>`:''}</div></div>`}).join('')||'<div class="mut small">还没有条目</div>'}
+      <div id="pushBox"></div></div></div>
+`;
+  talkBind(name);
+  const reload=()=>memoPage(name);
+  $('#mmNav').onclick=()=>taskNav(name,!!$('#mmNav').dataset.show);
+  const item=async(b)=>{try{const r=await post('/api/task/item',Object.assign({period:name},b));toast(r.msg);reload()}catch(e){
+    if(e.need){needDlg({period:name,note:e.need['备注']||'',confirm:name},e.need)}else toast(e.message)}};
+  $('#mmFull').onclick=()=>{fullView[name]=1;render()};
+  $('#mmDel').onclick=()=>delPeriod(name,true);
+  $('#mmAdd').onkeydown=e=>{if(e.key==='Enter'&&e.target.value.trim())item({action:'add',text:e.target.value.trim()})};
+  $('#mmSup').onkeydown=async e=>{const t=e.target.value.trim();if(e.key!=='Enter'||!t)return;
+    const br=/^[\w.\/-]+$/.test(t)&&/[-\/]/.test(t)&&!t.startsWith('/');
+    if(t.startsWith('/')&&!/\s/.test(t))return item({action:'repo',text:t});
+    try{toast((await post('/api/note',{period:name,content:t,category:'其他资料',kind:br?'分支':''})).msg);reload()}catch(err){toast(err.message)}};
+  app.querySelectorAll('[data-sdel]').forEach(a=>a.onclick=async()=>{try{toast((await post('/api/note',{period:name,id:a.dataset.sdel,delete:true})).msg);reload()}catch(e){toast(e.message)}});
+  const rs=$('#mmRepo');rs.onfocus=async()=>{if(rs.dataset.l)return;rs.dataset.l=1;try{const r=await api('/api/repos/choices');
+    rs.innerHTML=`<option value="">${v['工程']?esc(v['工程']):'— 未选 —'}</option>`+r.items.filter(x=>x['路径']!==v['工程']).map(x=>`<option value="${esc(x['路径'])}">${esc(x['名称'])}　${esc(x['分支']||'')}${x['改动']?` · ${x['改动']} 个未提交改动`:''}${x['在用'].length?` · 正用于 ${esc(x['在用'].join('、'))}`:''}</option>`).join('')}catch(e){toast(e.message)}};
+  rs.onchange=()=>{if(rs.value)item({action:'repo',text:rs.value})};
+  app.querySelectorAll('[data-mset]').forEach(a=>a.onclick=()=>item({action:'set',key:a.dataset.mset,status:a.dataset.st}));
+  app.querySelectorAll('[data-mdel]').forEach(a=>a.onclick=()=>{if(confirm('删除这一条？'))item({action:'delete',key:a.dataset.mdel})});
+  app.querySelectorAll('[data-manr]').forEach(a=>a.onclick=()=>anrDlg(a.dataset.manr,[]));
+  app.querySelectorAll('[data-mpush]').forEach(b=>b.onclick=()=>{const x=its.find(i=>i['键']===b.dataset.mpush);
+    openDlg('推动：'+x['标题'].slice(0,40),`<div class="form"><p class="small mut" style="margin:0">点了就是你批准处理这一条：不走开发流程，AI 自己判断怎么查、怎么改，改代码前先问你，做完把结论记在这一条下面。</p>
+      <textarea id="mpN" rows="3" placeholder="补充说明（可空）：如「先确认是不是三方 SDK 的问题」"></textarea><div class="row"><button class="pri" id="mpGo">推动</button></div></div>`);
+    $('#mpGo').onclick=()=>{dlg.close();item({action:'push',key:x['键'],text:$('#mpN').value.trim()})}});
+  pushBox(name);
+}
 function pushPage(d){
   const m=d.meta,name=d.name,src=m['外部来源']||[];
   const concl=(d.materials['其他资料']||[]).filter(f=>/结论/.test(f.name));
@@ -1473,7 +1586,7 @@ async function pushBox(name){
     +pend.map(q=>`<div class="q" data-q="${esc(q['编号'])}"><div style="font-weight:600">🔔 ${esc(q['问题'])}</div>${q['背景']?`<div class="ctx md">${md(q['背景']).html}</div>`:''}
       ${q['AI建议']?`<div class="small">AI 建议：<b>${esc(q['AI建议'])}</b></div>`:''}<div class="opts">${q['选项'].map((o,i)=>`<button data-opt="${i}">${esc(o)}</button>`).join('')}${q['AI建议']?'<button data-ai="1">采用 AI 建议</button>':''}</div>
       <textarea rows="2" placeholder="你的回答（Cmd+Enter 提交）">${esc(drafts[q['编号']]||'')}</textarea><div class="row" style="margin-top:6px"><button class="pri" data-ans="1">提交回答</button></div></div>`).join('')
-    +(v['动作'].length?`<details style="margin-top:8px" ${run?'open':''}><summary class="small mut">最近动作</summary><div class="act">${v['动作'].slice(-8).reverse().map(actLine).join('')}</div></details>`:'');
+    +(v['动作'].length&&!$('#tkMsg')?`<details style="margin-top:8px" ${run?'open':''}><summary class="small mut">最近动作</summary><div class="act">${v['动作'].slice(-8).reverse().map(actLine).join('')}</div></details>`:'');
   box.dataset.sig=sig;
   const st=$('#puStop');if(st)st.onclick=async()=>{if(!confirm('停止正在推动的后台 AI？'))return;try{toast((await post('/api/dev/stop',{period:name})).msg);pushBox(name)}catch(e){toast(e.message)}};
   box.querySelectorAll('.q').forEach(el=>{const id=el.dataset.q,ta=el.querySelector('textarea'),q=pend.find(x=>x['编号']===id);
@@ -1501,13 +1614,31 @@ function plDlg(d,p,mount){
     try{toast((await post('/api/plugin',{id:p.id,enabled:mount||p['启用'],events,config})).msg);dlg.close();render()}catch(e){toast(e.message)}};
 }
 async function plRunDlg(d,p){
-  let ps=[];try{ps=(await api('/api/overview')).periods.map(x=>x.name)}catch(_){}
-  openDlg(`运行一次 · ${p['名称']}`,`<div class="form"><div class="small mut">用这一期的开发仓库运行（开始开发后才有开发仓库），会改动仓库里的文件，和自动运行一样记进这一期的记录。</div>
-    <label>期<select id="prP">${ps.map(x=>`<option>${esc(x)}</option>`).join('')}</select></label>
-    <label>按哪个时机运行<select id="prE">${Object.keys(d.pluginEvents).map(e=>`<option>${esc(e)}</option>`).join('')}</select></label>
-    <div class="row"><button class="pri" id="prGo">运行</button></div></div>`);
-  $('#prGo').onclick=async()=>{const b=$('#prGo');b.disabled=true;b.textContent='运行中…';
-    try{const r=await post('/api/plugin/run',{id:p.id,period:$('#prP').value,event:$('#prE').value});openDlg('运行结果',`<pre style="white-space:pre-wrap">${esc(r.msg)}</pre>`)}
+  let T={期:[],仓库:[]};try{T=await api('/api/plugin/targets')}catch(e){toast(e.message)}
+  const pi=x=>`<div class="ddi" data-pt="${esc(x['名称'])}"><b>${esc(x['名称'])}</b> ${x['状态']==='已完成'?badge('已完成'):''}<div class="small mut">${esc(x['分支']||'分支未写')} · ${esc(x['仓库']?x['仓库'].split('/').pop():'未定仓库')}</div></div>`;
+  openDlg(`运行一次 · ${p['名称']}`,`<div class="form" style="min-width:min(560px,86vw)"><div class="small mut">选一期或直接输分支：知识库会切到这个分支（本地没有就从远端拉）、拉最新代码，运行后把改动提交并推送，再切回原来的分支。仓库被占用时自动排队。</div>
+    <label>期 / 分支<div class="combo"><input type="text" id="prT" placeholder="期名，或分支名如 feature-xxx-stable" autocomplete="off"><button type="button" id="prDd" title="选一期" style="width:44px;font-size:12px;line-height:1">▼</button>
+      <div class="dd" id="prL" hidden>${T['期'].map(pi).join('')||'<div class="small mut" style="padding:8px">没有进行中的期</div>'}</div></div></label>
+    <div class="small" id="prInfo"></div>
+    <label id="prRL" hidden style="display:none">在哪个仓库运行<select id="prR"><option value="">— 选基础信息里的本地工程 —</option>${T['仓库'].map(r=>`<option value="${esc(r['路径'])}" ${r.git?'':'disabled'}>${esc(r['名称'])}　${esc(r['路径'])}${r.git?'':'（不是 git 仓库）'}</option>`).join('')}</select></label>
+    <div class="small row" style="gap:6px"><input type="checkbox" id="prPush" checked style="width:auto;margin:0"><span>有改动就提交并推送</span></div>
+    <div class="row"><button class="pri" id="prGo">运行</button></div>
+    <div class="act small" id="prSteps" style="white-space:pre-wrap"></div></div>`);
+  const L=$('#prL'),inp=$('#prT');
+  $('#prDd').onclick=e=>{e.preventDefault();L.hidden=!L.hidden};
+  L.querySelectorAll('[data-pt]').forEach(x=>x.onclick=()=>{inp.value=x.dataset.pt;L.hidden=true;check()});
+  const check=()=>{const v=inp.value.trim(),hit=T['期'].find(x=>x['名称']===v)||T['期'].find(x=>x['分支']&&x['分支']===v);
+    const needRepo=!!v&&(!hit||!hit['仓库']);$('#prRL').hidden=!needRepo;$('#prRL').style.display=needRepo?'':'none';
+    $('#prInfo').innerHTML=!v?'':hit?`→ 「${esc(hit['名称'])}」　分支 <b class="mono">${esc(hit['分支']||'（用仓库当前分支）')}</b>　${hit['仓库']?'仓库 '+esc(hit['仓库']):'<span style="color:var(--s4)">这一期还没有仓库，选一个</span>'}`
+      :`<span class="mut">不是已有的期，当作新分支 <b class="mono">${esc(v)}</b>：选在哪个仓库运行</span>`};
+  inp.oninput=check;
+  $('#prGo').onclick=async()=>{const b=$('#prGo');b.disabled=true;b.textContent='运行中…';const st=$('#prSteps');
+    try{const r=await post('/api/plugin/run2',{id:p.id,target:inp.value.trim(),repo:$('#prRL').hidden?'':$('#prR').value,push:$('#prPush').checked});
+      const poll=async()=>{let j;try{j=await api('/api/plugin/job?id='+r.job)}catch(e){st.textContent=e.message;return}
+        if(!dlg.open)return;
+        st.textContent=j['步骤'].map(x=>x[0]+'  '+x[1]).join('\n');b.textContent=j['状态']==='排队中'?'排队中…':'运行中…';
+        if(j['状态']==='完成'||j['状态']==='失败'){b.disabled=false;b.textContent='再运行一次';toast(j['结果'])}else setTimeout(poll,1500)};
+      poll()}
     catch(e){toast(e.message);b.disabled=false;b.textContent='运行'}};
 }
 async function settingsPage(){
@@ -1721,7 +1852,7 @@ const canRender=()=>!Object.values(drafts).some(x=>x)&&!dlg.open&&!document.acti
 function softRender(){if(!canRender()){pagePending=true;return}pagePending=false;const y=scrollY;render().then(()=>scrollTo(0,y))}
 function onEvt(ev){
   const h=decodeURIComponent(location.hash.slice(1)||'/'), p=curPeriod();
-  if(ev.kind==='dev'&&p===ev.period){if($('#pushBox'))pushBox(p);else{devBox(p);talkBox(p)}}
+  if(ev.kind==='dev'&&p===ev.period){if($('#pushBox')){pushBox(p);if($('#tkMsg'))talkBox(p)}else{devBox(p);talkBox(p)}}
   if(ev.kind==='overview'&&p&&$('#tkMsg'))talkBox(p);
   else if(ev.kind==='page'&&p===ev.period)softRender();
   else if(ev.kind==='overview'&&(h==='/'||h==='/bugs'||h==='/anr'))softRender();

@@ -32,6 +32,7 @@ from .bugs.analysis import bug_analysis
 from .bugs.fix import bug_fixed
 from .talk import take_session_msgs
 from .builds import builds_text
+from .memo import task_item_set, task_items
 from .anr.store import anr_add, anr_link, anr_list, anr_mapping, anr_set_version, anr_show
 
 
@@ -227,6 +228,9 @@ TOOLS = [
     ('kb_builds', '这一期（事项）在构建平台（如 Jenkins）上的构建：任务、每次构建的结果、完整版本、提交、安装包和 mapping 地址、这个包上报的 Bug。'
                   '找测试包装机、对版本、给 ANR / 崩溃取 mapping 时用；只读，不触发构建。',
      S(iteration=STR('期 / 事项名'), count={'type': 'integer', 'description': '每个任务取几次构建（默认 5）'}), ['iteration']),
+    ('kb_task_item', '记下事项里某一条的处理结果（网页上每条单独「推动」时，处理完用它把结论记回这一条）。不带 item = 列出这个事项的条目和状态。',
+     S(iteration=STR('事项名'), item=STR('条目键，如 anr:6c8592be、bug:82613、E001'),
+       status=STR('已解决 / 没解决 / 待确认 / 推动中'), conclusion=STR('结论一两句：根因、改了什么、提交号')), ['iteration']),
     ('kb_plugin_call', '调用按需「工具」插件（用户自己装的，如按会话编号拉取外部系统的会话内容）。不带 plugin = 列出可用插件和参数说明。'
                        '插件需要的账号由知识库从基础信息交给插件，不要自己找密码。',
      S(plugin=STR('插件 id（先不带参数调用一次看有哪些）'), args={'type': 'array', 'items': {'type': 'string'}, 'description': '传给插件的参数'},
@@ -354,6 +358,11 @@ def _call_tool(name, a):
         return anr_show(g('id')) if g('id') else anr_list(g('query') or '', g('task') or '')
     if name == 'kb_anr_mapping':
         return anr_mapping(g('version'), g('path'))
+    if name == 'kb_task_item':
+        if not g('item'):
+            return '\n'.join(f'- {x["键"]} ［{x["状态"]}］{x["标题"]}' + (f'\n  结论：{x["结论"]}' if x.get('结论') else '')
+                             for x in task_items(g('iteration'))) or '这个事项还没有条目'
+        return task_item_set(g('iteration'), g('item'), g('status') or '', g('conclusion') or '')
     if name == 'kb_builds':
         return builds_text(g('iteration'), int(g('count') or 5))
     if name == 'kb_plugin_call':

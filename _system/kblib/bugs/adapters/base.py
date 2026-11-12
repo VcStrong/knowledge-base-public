@@ -134,7 +134,7 @@ JENKINS_RE = re.compile(r'https?://[^\s<>"\']*/jenkins/(?:job/[^/\s<>"\']+/?)+(?
 def jenkins(text):
     """正文里的 Jenkins 地址 → (地址, 任务名)。安卓的任务名 = 前缀 + 分支名，如 app_android_new_feature-xxx-stable。"""
     mm = JENKINS_RE.search(text or '')
-    if not mm:      # 只写了任务名：「Jenkins： mvbox_android_new_feature-xxx-stable #7」
+    if not mm:      # 只写了任务名：「Jenkins： app_android_feature-xxx-stable #7」
         sec = section(text or '', 'Jenkins', 'jenkis')
         jm = re.match(r'([A-Za-z][\w.-]{5,})', sec)
         return ('', jm.group(1)) if jm else ('', '')

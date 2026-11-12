@@ -12,7 +12,7 @@ import zipfile
 from datetime import datetime
 from pathlib import Path
 
-from ..common import SYS, KBError, now
+from ..common import PERIODS, SYS, KBError, now
 from ..infra import fetch
 from .store import (_AR_LOCK, AR_SAMPLES, _ar_load, _ar_probs, _ar_save, _ar_save_probs, _ar_write_md, anr_add, anr_link,
                     anr_mapping, auto_version)
@@ -87,8 +87,57 @@ def _manual(text, title, version, source, by):
     return samples[-1]['问题']
 
 
+def repo_choices():
+    """自建问题 / 建事项时选代码仓库：登记过的仓库 + 各期用过的开发仓库，附当前分支、未提交改动、正被哪些期用着。"""
+    from ..repos import load_repos
+    from ..periods import load_meta, period_names
+    import subprocess
+    paths = {}
+    for nm, r in load_repos().items():
+        pth = r.get('路径') if isinstance(r, dict) else r
+        if pth:
+            paths.setdefault(str(Path(pth).expanduser()), set())
+    for n in period_names():
+        m = load_meta(PERIODS / n)
+        if m.get('开发仓库'):
+            u = paths.setdefault(m['开发仓库'], set())
+            s = m.get('开发会话') or {}
+            if m.get('状态') in ('已批准开发', '开发中') or s.get('状态') == '运行中':
+                u.add(n)
+    out = []
+    for pth, users in paths.items():
+        if not (Path(pth) / '.git').exists():
+            continue
+        g = lambda *a: subprocess.run(['git', '-C', pth, *a], capture_output=True, text=True).stdout.strip()
+        dirty = len([x for x in g('status', '--porcelain').splitlines() if x.strip()])
+        out.append({'路径': pth, '名称': Path(pth).name, '分支': g('branch', '--show-current'), '改动': dirty,
+                    '在用': sorted(users)})
+    return sorted(out, key=lambda x: (bool(x['在用']) or x['改动'] > 0, x['名称']))
+
+
+def _setup_task(name, branch, repo, by):
+    """新建的事项直接带上分支和代码仓库，点「开始开发」就能用。"""
+    from ..periods import load_meta, log, period_dir, save_meta
+    from ..notes import add_note
+    d = period_dir(name)
+    out = []
+    if branch:
+        add_note(d.name, branch, '其他资料', '分支', source=by)
+        out.append(f'分支 {branch}')
+    if repo:
+        rp = Path(repo).expanduser()
+        if not (rp / '.git').exists():
+            raise KBError(f'{rp} 不是 git 仓库')
+        m = load_meta(d)
+        m['开发仓库'] = str(rp)
+        save_meta(d, m)
+        log(d, '确认开发仓库', f'{rp}（建事项时指定，{by}）')
+        out.append(f'仓库 {rp}')
+    return out
+
+
 def anr_create(text='', paths=(), title='', version='', source='', task='', note='', mapping_url='', mapping_path='',
-               by='用户（网页）'):
+               by='用户（网页）', task_name='', branch='', repo=''):
     """自建问题：先归档 mapping（有的话），再归档日志（文件 + 粘贴内容）；认不出堆栈的按标题建「手动」问题。"""
     version = (version or '').strip()
     text = (text or '').strip()
@@ -134,6 +183,24 @@ def anr_create(text='', paths=(), title='', version='', source='', task='', note
                     out.append(r)
             except KBError as e:
                 out.append(f'从构建取版本 {v} 的 mapping 失败：{e}')
+    if pids and new_task:              # 这次的问题都归到一个新事项（不是一个问题建一个）
+        from .store import _ar_task_name, anr_problems
+        from ..periods import create_task
+        ps = {p['编号']: p for p in anr_problems(True)}
+        first = ps[pids[0]]
+        name = (task_name or '').strip() or (_ar_task_name(first) if len(pids) == 1
+                                             else f'ANR/崩溃 {len(pids)} 个问题 {datetime.now():%m%d}')
+        total = sum(ps[x]['次数'] for x in pids)
+        create_task(name, f'{len(pids)} 个 ANR / 崩溃问题' + (f'（{source}）' if source else ''), 'ANR/崩溃', f'ANR崩溃 {"、".join(pids)}',
+                    '高' if total >= 10 else '中', by=by)
+        out = [x.replace('\n没关联事项的问题，可以在网页「💥 ANR / 崩溃」点「建事项」，或 kb_anr_link 归到已有事项。', '') for x in out]
+        out.append(f'新建事项「{name}」，关联 {len(pids)} 个问题')
+        out += _setup_task(name, (branch or '').strip(), (repo or '').strip(), by)
+        task, new_task = name, False
+        for pid in pids:
+            anr_link(pid, task=name, by=by)
+    elif pids and task and (branch or repo):
+        out += _setup_task(task, (branch or '').strip(), (repo or '').strip(), by)
     if pids and ((title or '').strip() or note or task):
         probs = _ar_probs()
         for pid in pids:
@@ -145,3 +212,29 @@ def anr_create(text='', paths=(), title='', version='', source='', task='', note
                 anr_link(pid, task=task or None, note=note or None, by=by)
         _ar_write_md()
     return '\n'.join(x for x in out if x)
+
+
+def anr_batch(pids, task, name='', by='用户（网页）'):
+    """问题列表里勾选几个：task='＋新建' 建一个新批次（事项）把它们都放进去；事项名 = 加入已有批次。"""
+    from datetime import datetime
+    from .store import anr_link, anr_problems
+    from ..periods import create_task
+    pids = [x for x in dict.fromkeys(pids or []) if x]
+    if not pids:
+        raise KBError('先勾选问题')
+    ps = {p['编号']: p for p in anr_problems(True)}
+    bad = [x for x in pids if x not in ps]
+    if bad:
+        raise KBError(f'没有这些问题：{"、".join(bad)}')
+    out = []
+    if task in ('＋新建', '+新建', '新建'):
+        task = (name or '').strip() or f'ANR/崩溃 {len(pids)} 个问题 {datetime.now():%m%d}'
+        total = sum(ps[x]['次数'] for x in pids)
+        create_task(task, f'{len(pids)} 个 ANR / 崩溃问题', 'ANR/崩溃', f'ANR崩溃 {"、".join(pids)}', '高' if total >= 10 else '中', by=by)
+        out.append(f'新建批次「{task}」')
+    elif not task:
+        raise KBError('选一个批次，或新建')
+    for pid in pids:
+        anr_link(pid, task=task, by=by)
+    out.append(f'{len(pids)} 个问题放进「{task}」')
+    return '；'.join(out)

@@ -4,6 +4,8 @@
 只做纯计算，不落盘；存储、归并、和事项关联由 kb.py 负责。
 支持：
 - ANR traces（/data/anr/anr_*、traces.txt：「----- pid N at … -----」+ 各线程堆栈）、Bugly 等导出的主线程堆栈
+- 平台导出的线程堆栈：「main (blocked):tid=1 systid=… | waiting to lock <…> held by thread 41」，
+  一次粘贴多段时每段用引号包起来（"main (runnable):tid=1 …"），一段一次 ANR；同一段里的持锁线程一起带上
 - Java 崩溃（logcat 的 FATAL EXCEPTION、异常 + at 帧 + Caused by）
 - Native 崩溃（tombstone：signal + backtrace #00 pc …）
 """
@@ -14,7 +16,8 @@ import re
 SYS_PREFIX = ('android.', 'androidx.', 'java.', 'javax.', 'kotlin.', 'kotlinx.', 'dalvik.', 'libcore.', 'sun.', 'jdk.',
               'com.android.', 'com.google.', 'org.json.', 'org.apache.', 'org.chromium.', 'org.xmlpull.', 'okhttp3.', 'okio.',
               'retrofit2.', 'io.reactivex.', 'rx.', 'com.squareup.', 'com.facebook.', 'com.bumptech.', 'com.tencent.bugly.',
-              'com.tencent.mmkv.', 'org.greenrobot.', 'io.flutter.', 'com.github.', 'org.jetbrains.')
+              'com.tencent.mmkv.', 'org.greenrobot.', 'io.flutter.', 'com.github.', 'org.jetbrains.',
+              'com.alibaba.', 'com.zing.zalo.', 'com.appsflyer.', 'com.adjust.', 'com.huawei.hms.', 'com.umeng.', 'io.sentry.')
 NATIVE_SYS = ('/system/', '/apex/', '/vendor/', '[vdso]', '/data/dalvik-cache/', 'linker')
 SIG_FRAMES = 3       # 签名取前几个应用帧
 KEY_LINES = 40       # 关键堆栈保留行数
@@ -26,6 +29,7 @@ _FRAME = re.compile(r'^\s*(?:at\s+)?([A-Za-z_$][\w$]*(?:\.[\w$<>-]+)+)\(([^()]*)
 _EXC = re.compile(r'^\s*(Caused by:\s*)?((?:[a-z_$][\w$]*\.)+[A-Za-z_$][\w$]*(?:Exception|Error|Throwable|Failure|Crash)[\w$]*'
                   r'|(?:[a-z_$][\w$]*\.)*[a-z_$]{1,3}\.[a-z_$]{1,3})(?::\s?(.*))?$')
 _THREAD = re.compile(r'^"(.+?)"\s.*?\btid=(\d+)\s+(\w+)')
+_PTHREAD = re.compile(r'^\s*"?([^"\n()]+?)\s+\((\w+)\):\s*tid=(\d+)\b')     # 平台导出：main (blocked):tid=1 systid=…
 _NATIVE = re.compile(r'^\s*#(\d+)\s+pc\s+([0-9a-fA-F]+)\s+(\S+)(.*)$')
 _SIGNAL = re.compile(r'signal\s+\d+\s+\((\w+)\)(?:,\s*code\s+-?\d+\s+\((\w+)\))?')
 
@@ -75,6 +79,21 @@ def split_events(text):
     lines = _clean(text)
     body = '\n'.join(lines)
     out = []
+    # 平台导出的线程堆栈：每段 "线程 (状态):tid=N …" 用引号包着，一段一次 ANR
+    if any(_PTHREAD.match(ln) for ln in lines):
+        segs, cur = [], []
+        for ln in lines:
+            if ln.lstrip().startswith('"') and _PTHREAD.match(ln) and cur:
+                segs.append(cur)
+                cur = []
+            cur.append(ln)
+        segs.append(cur)
+        for sg in segs:
+            t = '\n'.join(sg).strip().strip('"').strip()
+            if t and _FRAME.search(t) or re.search(r'(?m)^\s*at\s', t):
+                out.append({'类型': 'ANR', '原文': t})
+        if out:
+            return out
     # ANR traces：只要第一个进程块（发生 ANR 的进程；后面是 system_server 等陪跑进程）
     if re.search(r'^-----\s*pid\s+\d+\s+at\s', body, re.M) and re.search(r'^"main"', body, re.M):
         blocks = re.split(r'(?m)^(?=-----\s*pid\s+\d+\s+at\s)', body)
@@ -246,9 +265,11 @@ def _threads(lines):
     ths, cur = {}, None
     for ln in lines:
         t = _THREAD.match(ln)
-        if t:
-            cur = {'名称': t.group(1), 'tid': t.group(2), '状态': t.group(3), '行': [ln]}
-            ths[t.group(2)] = cur
+        p = None if t else _PTHREAD.match(ln)
+        if t or p:
+            name, tid, st = (t.group(1), t.group(2), t.group(3)) if t else (p.group(1).strip(), p.group(3), p.group(2))
+            cur = {'名称': name, 'tid': tid, '状态': st, '行': [ln]}
+            ths[tid] = cur
             continue
         if cur is not None:
             if not ln.strip():
@@ -306,6 +327,11 @@ def analyze(ev, mp=None):
         else:
             sig = 'ANR|' + '|'.join(key)        # 只看主线程的应用帧：状态、持锁线程每次可能不同，不进签名
             title = f'ANR · 主线程 {state + " · " if state else ""}' + (_short(app[0]) if app else (_short(ms[0]) if ms else '?'))
+            jdk = ('java.', 'javax.', 'android.', 'androidx.', 'dalvik.', 'libcore.', 'kotlin.', 'kotlinx.', 'sun.', 'jdk.', 'com.android.')
+            first = ms.index(app[0]) if app and app[0] in ms else len(ms)
+            sdk = [m for m in ms[:first] if not m.startswith(jdk)]
+            if sdk:                                 # 卡在三方 SDK 里：写明是哪个（离应用代码最近的那一帧）
+                title += f'（卡在三方 {_short(sdk[-1])}）'
         stack = [x for x, _ in fr][:KEY_LINES]
         if holder:
             hf = _frames(holder['行'], mp)

@@ -40,6 +40,8 @@ _MODULES = [
     'anr.store',
     'anr.manual',
     'builds',
+    'memo',
+    'pluginrun',
     'mcp',
     'cli',
 ]

@@ -14,8 +14,8 @@ from datetime import datetime
 from pathlib import Path
 
 from .common import KBError, now, uuid_hex
-from .periods import load_meta, log, period_dir, period_names, save_meta
-from .notes import add_note
+from .periods import load_meta, log, period_dir, period_names, save_meta, set_status
+from .notes import add_note, note_title, notes_of
 from .devices import dev_activity
 from .engines import engine_popen, period_engine
 from .devsession import DEV_DIR, _NO_BG, _alive, _dev_env, _dev_spawn, _notify, _session_id, dev_chat, dev_session
@@ -92,7 +92,7 @@ def period_talk(name):
     m = load_meta(d)
     return {'会话': period_sessions(d.name), '动作': period_activity(d.name), '对话': (m.get('对话') or [])[-6:],
             '排队': sum(1 for x in m.get('对话') or [] if x['状态'] == '排队中'),
-            '状态': m.get('状态', '')}
+            '状态': m.get('状态', ''), '事项': m.get('类型') == '事项'}
 
 
 # ---- 发消息
@@ -110,8 +110,39 @@ def _push_prompt(name, root, branch, text, resumed):
 不要改这一期的状态，不要做用户没提到的开发。""" + _NO_BG
 
 
+def _task_prompt(d, m, root, branch, text, resumed):
+    """事项：不走开发流程，接着上次的上下文按用户的话继续（如「编译校验一下」）。"""
+    sup = [f'- 工程：{root}'] + [f'- {"分支" if n.get("类型") == "分支" else "补充"}：'
+                                 f'{note_title(n) if n.get("类型") == "分支" else (n.get("内容") or note_title(n))}' for n in notes_of(d, m=m)]
+    head = '' if resumed else (f'你是由知识库网页启动的【后台无人值守】会话，处理事项「{d.name}」。终端里没有人，不要在回复里提问，'
+                               '也不要用 AskUserQuestion；要问用户就用 kb_ask（iteration 填事项名），再用 kb_wait_answer 等回答。\n'
+                               '事项的补充信息：\n' + '\n'.join(sup) + '\n\n')
+    return head + f"""用户在知识库网页上接着说（{now()}）：
+{text}
+
+接着上面的上下文继续做（比如上次只改了代码，这次让你编译校验，就去编译、跑相关测试并说明结果）。不走开发流程，不用 SDD；
+要再改代码先用 kb_ask 说清改法（提示免打扰就按你的建议做）；提交按仓库惯例，不 push。和某一条的结果有关的，用 kb_task_item 更新那一条的结论。
+回复里简短说明做了什么、结果如何。不要改事项的状态。""" + _NO_BG
+
+
 def _push(d, m, text, by):
-    """没有会话在跑：按内容推动解决。"""
+    """没有会话在跑：按内容推动解决（事项：接着上次的上下文继续，不走开发流程）。"""
+    if m.get('类型') == '事项':
+        s = dev_session(d.name) or {}
+        root = m.get('开发仓库') or s.get('仓库') or ''
+        if not root or not Path(root).is_dir():
+            raise KBError('先在「补充」里选好工程（代码仓库）')
+        branch = next((note_title(n) for n in notes_of(d, m=m) if n.get('类型') == '分支'), '') or s.get('分支', '')
+        sid = _session_id(s['日志']) if s.get('日志') and s.get('仓库') == root else ''
+        m.setdefault('对话', []).append({'时间': now(), '内容': text, '方式': '接着做' if sid else '推动解决', '状态': '已送达',
+                                        '送达时间': now(), '会话': 'dev', '目标': '接着上次的会话' if sid else '新会话'})
+        save_meta(d, m)
+        if m.get('状态') != '开发中':
+            set_status(d.name, '开发中', '网页「跟这个事项说」（本人批准）', by_human=True)
+        proc = _dev_spawn(d, Path(root), branch, _task_prompt(d, load_meta(d), root, branch, text, bool(sid)), sid,
+                          续跑次数=0, 类型='跟进', 仅对话=True)
+        log(d, '推动解决', f'{"接着上次的会话" if sid else "新开会话"}（pid {proc.pid}）：{text[:100]}（{by}）')
+        return '已' + ('接着上次的会话（保留上下文）' if sid else '新开会话') + '交给 AI，进展看下面的动作'
     if m.get('状态') == '收集中':
         add_note(d.name, text, '需求', '文字', source=by)
         return '这一期还在收集中，已记进「需求」文字资料；开始开发时会一起处理'
