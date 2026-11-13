@@ -4,8 +4,8 @@ import os
 import re
 from datetime import datetime
 from urllib.parse import urlencode
-from .base import SourceError, http, local_time
-from .crash import native_stack, anr_stack, CrashSource
+from kblib.bugs.adapters.base import SourceError, http, local_time
+from kblib.bugs.adapters.crash import native_stack, anr_stack, CrashSource
 
 
 class BuglySource(CrashSource):

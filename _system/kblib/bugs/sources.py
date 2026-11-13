@@ -3,15 +3,15 @@
 import json
 import subprocess
 import sys
-from ..common import KBError, load_settings, save_settings
-from ..baseinfo import base_load, base_secret
-from ..plugins import _plugin_env, plugins
-from .. import lazy
+from kblib.core.common import KBError, load_settings, save_settings
+from kblib.core.baseinfo import base_load, base_secret
+from kblib.plugins.registry import _plugin_env, plugins
+from kblib import lazy
 _bug_index = lazy('kblib.bugs.index')      # 上层模块：用到时才 import（不形成循环）
 
 
 def _bsrc():
-    from ..bugs import adapters as bugsrc
+    from kblib.bugs import adapters as bugsrc
     return bugsrc
 
 

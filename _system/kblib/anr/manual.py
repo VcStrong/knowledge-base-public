@@ -12,9 +12,9 @@ import zipfile
 from datetime import datetime
 from pathlib import Path
 
-from ..common import PERIODS, SYS, KBError, now
-from ..infra import fetch
-from .store import (_AR_LOCK, AR_SAMPLES, _ar_load, _ar_probs, _ar_save, _ar_save_probs, _ar_write_md, anr_add, anr_link,
+from kblib.core.common import PERIODS, SYS, KBError, now
+from kblib.infra import fetch
+from kblib.anr.store import (_AR_LOCK, AR_SAMPLES, _ar_load, _ar_probs, _ar_save, _ar_save_probs, _ar_write_md, anr_add, anr_link,
                     anr_mapping, auto_version)
 
 MAP_MAX = 800 * 1024 * 1024
@@ -63,7 +63,7 @@ def anr_mapping_url(version, url, by='用户（网页）'):
 
 def _manual(text, title, version, source, by):
     """认不出堆栈：按标题建一个「手动」问题。"""
-    from . import parse as anr
+    from kblib.anr import parse as anr
     title = (title or '').strip()
     lines = [x.rstrip() for x in (text or '').splitlines() if x.strip()]
     if not title:
@@ -88,11 +88,19 @@ def _manual(text, title, version, source, by):
 
 
 def repo_choices():
-    """自建问题 / 建事项时选代码仓库：登记过的仓库 + 各期用过的开发仓库，附当前分支、未提交改动、正被哪些期用着。"""
-    from ..repos import load_repos
-    from ..periods import load_meta, period_names
+    """自建问题 / 建事项时选代码仓库：登记过的仓库 + 各期用过的开发仓库，附是哪一端、当前分支、未提交改动、正被哪些期用着。"""
+    from kblib.core.repos import load_repos
+    from kblib.core.periods import load_meta, period_names
     import subprocess
+    from kblib.infra import hosts
+    from kblib.stack.plan import detect_ends
     paths = {}
+    try:                                       # 基础信息里写的本机代码路径也算
+        from kblib.plugins.run import base_repo_paths
+        for r in base_repo_paths():
+            paths.setdefault(str(Path(r['路径']).expanduser()), set())
+    except Exception:
+        pass
     for nm, r in load_repos().items():
         pth = r.get('路径') if isinstance(r, dict) else r
         if pth:
@@ -106,19 +114,26 @@ def repo_choices():
                 u.add(n)
     out = []
     for pth, users in paths.items():
-        if not (Path(pth) / '.git').exists():
+        if hosts.is_remote(pth):
             continue
-        g = lambda *a: subprocess.run(['git', '-C', pth, *a], capture_output=True, text=True).stdout.strip()
-        dirty = len([x for x in g('status', '--porcelain').splitlines() if x.strip()])
-        out.append({'路径': pth, '名称': Path(pth).name, '分支': g('branch', '--show-current'), '改动': dirty,
-                    '在用': sorted(users)})
+        if (Path(pth) / '.git').exists():
+            g = lambda *a: subprocess.run(['git', '-C', pth, *a], capture_output=True, text=True).stdout.strip()
+            dirty = len([x for x in g('status', '--porcelain').splitlines() if x.strip()])
+            branch = g('branch', '--show-current')
+        elif (Path(pth) / '.svn').exists():           # svn 工作副本也能选
+            r = subprocess.run(['svn', 'status', '--non-interactive', pth], capture_output=True, text=True)
+            dirty = len([x for x in r.stdout.splitlines() if x.strip() and not x.startswith('?')])
+            branch = hosts.branch_of(pth, 'svn')
+        else:
+            continue
+        out.append({'路径': pth, '名称': Path(pth).name, '端': detect_ends(pth), '分支': branch, '改动': dirty, '在用': sorted(users)})
     return sorted(out, key=lambda x: (bool(x['在用']) or x['改动'] > 0, x['名称']))
 
 
 def _setup_task(name, branch, repo, by):
     """新建的事项直接带上分支和代码仓库，点「开始开发」就能用。"""
-    from ..periods import load_meta, log, period_dir, save_meta
-    from ..notes import add_note
+    from kblib.core.periods import load_meta, log, period_dir, save_meta
+    from kblib.core.notes import add_note
     d = period_dir(name)
     out = []
     if branch:
@@ -148,7 +163,7 @@ def anr_create(text='', paths=(), title='', version='', source='', task='', note
     out = []
     if mapping_url or mapping_path:
         if not version:                 # 版本不是必填：先从日志里认，认不出就给这次的日志和 mapping 起一个共用的版本名
-            from . import parse as anr
+            from kblib.anr import parse as anr
             version = anr._version(text) or next((anr._version(p.read_text('utf-8', 'replace')[:200000]) for p in paths
                                                   if p.is_file() and p.suffix.lower() != '.zip'), '') or auto_version()
         out.append(anr_mapping_url(version, mapping_url, by) if mapping_url else anr_mapping(version, mapping_path, by=by))
@@ -173,19 +188,19 @@ def anr_create(text='', paths=(), title='', version='', source='', task='', note
     finally:
         shutil.rmtree(d, ignore_errors=True)
     if pids and not (mapping_url or mapping_path):          # 没带 mapping：到各期的构建里找同版本的（挂了构建插件时）
-        from .store import _ar_map_file
+        from kblib.anr.store import _ar_map_file
         vers = {x['版本'] for x in _ar_load() if x['问题'] in pids and x.get('版本') and x.get('已还原') is False}
         for v in sorted(v for v in vers if not _ar_map_file(v)):
             try:
-                from .. import builds
+                from kblib.plugins import builds
                 r = builds.anr_auto_mapping(v, by)
                 if r:
                     out.append(r)
             except KBError as e:
                 out.append(f'从构建取版本 {v} 的 mapping 失败：{e}')
     if pids and new_task:              # 这次的问题都归到一个新事项（不是一个问题建一个）
-        from .store import _ar_task_name, anr_problems
-        from ..periods import create_task
+        from kblib.anr.store import _ar_task_name, anr_problems
+        from kblib.core.periods import create_task
         ps = {p['编号']: p for p in anr_problems(True)}
         first = ps[pids[0]]
         name = (task_name or '').strip() or (_ar_task_name(first) if len(pids) == 1
@@ -217,8 +232,8 @@ def anr_create(text='', paths=(), title='', version='', source='', task='', note
 def anr_batch(pids, task, name='', by='用户（网页）'):
     """问题列表里勾选几个：task='＋新建' 建一个新批次（事项）把它们都放进去；事项名 = 加入已有批次。"""
     from datetime import datetime
-    from .store import anr_link, anr_problems
-    from ..periods import create_task
+    from kblib.anr.store import anr_link, anr_problems
+    from kblib.core.periods import create_task
     pids = [x for x in dict.fromkeys(pids or []) if x]
     if not pids:
         raise KBError('先勾选问题')

@@ -6,18 +6,18 @@ import sys
 import threading
 from datetime import datetime
 from pathlib import Path
-from ..common import KBError, KBNeed, load_settings, now, read_text, save_settings, uuid_hex
-from ..periods import load_meta, log, period_dir
-from ..repos import load_repos
-from ..search import index_docs
-from ..engines import engine_popen, role_engine
-from ..devprep import _git, _git_root, repo_candidates, want_branches
-from ..hosts import is_remote
-from .. import hosts
-from ..devsession import _alive, _dev_result, _notify
-from ..bugs.sources import bug_sources
-from ..bugs.index import ZT_DIR, _zt_recheck, zt_load, zt_save
-from .. import lazy
+from kblib.core.common import KBError, KBNeed, load_settings, now, read_text, save_settings, uuid_hex
+from kblib.core.periods import load_meta, log, period_dir
+from kblib.core.repos import load_repos
+from kblib.core.search import index_docs
+from kblib.ai.engines import engine_popen, role_engine
+from kblib.ai.devprep import _git, _git_root, repo_candidates, want_branches
+from kblib.infra.hosts import is_remote
+from kblib.infra import hosts
+from kblib.ai.devsession import _alive, _dev_result, _notify
+from kblib.bugs.sources import bug_sources
+from kblib.bugs.index import ZT_DIR, _zt_recheck, zt_load, zt_save
+from kblib import lazy
 _bug_fix = lazy('kblib.bugs.fix')      # 上层模块：用到时才 import（不形成循环）
 
 
@@ -298,6 +298,11 @@ def _an_finish(sid, code=None):
                 done.append(b)
             else:
                 left.append(b)
+        try:
+            shelf = _bug_fix.fx_shelve(x, data)        # 会话留下的改动收起来（stash / 补丁），不卡后面的修复队列
+        except Exception as ex:
+            shelf = f'；⚠ 遗留改动没收起：{ex!r}'
+            print('fx_shelve:', repr(ex), file=sys.stderr)
         zt_save(data)
         x['完成'] = done
         svn = (Path(x['仓库']) / '.svn').exists() and not (Path(x['仓库']) / '.git').exists()
@@ -310,7 +315,7 @@ def _an_finish(sid, code=None):
             tail = f'；新提交 {len(new)} 个'
         x['新提交'] = new[:20]
         _an_save(items)
-        _notify('知识库 · Bug 修复', f'修好 {len(done)} 条' + (f'，未完成 {"、".join(left)}' if left else '') + tail)
+        _notify('知识库 · Bug 修复', f'修好 {len(done)} 条' + (f'，未完成 {"、".join(left)}' if left else '') + tail + shelf)
         try:
             _bug_fix.fix_queue_tick()          # 队列里还有的接着修
         except Exception as ex:

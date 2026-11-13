@@ -7,7 +7,7 @@ import re
 import time
 from datetime import datetime
 from urllib.parse import urljoin
-from .base import (
+from kblib.bugs.adapters.base import (
     Source,
     SourceError,
     bracket_sections,
@@ -45,7 +45,7 @@ class ZentaoSource(Source):
 
     @property
     def zt(self):
-        from . import zentao_api as zentao
+        from kblib.bugs.adapters import zentao_api as zentao
         url = self.cred.get('地址', '网址', 'URL', 'url')
         user = self.cred.get('用户名', '账号', '帐号')
         if not url or not user or not self.cred.has('密码'):
@@ -58,7 +58,7 @@ class ZentaoSource(Source):
         return self._clients[k]
 
     def _call(self, fn, *a, **kw):
-        from . import zentao_api as zentao
+        from kblib.bugs.adapters import zentao_api as zentao
         try:
             return fn(*a, **kw)
         except zentao.ZentaoError as e:
@@ -68,7 +68,7 @@ class ZentaoSource(Source):
         return self.zt.account
 
     def test(self):
-        from . import zentao_api as zentao
+        from kblib.bugs.adapters import zentao_api as zentao
         zt = self.zt
         out = []
         self._call(zt.login)
@@ -119,7 +119,7 @@ class ZentaoSource(Source):
 
     def _names(self, names, b):
         """补齐产品 / 项目 / 执行的名称（缓存在来源状态里）。"""
-        from . import zentao_api as zentao
+        from kblib.bugs.adapters import zentao_api as zentao
         for kind, path, fld in (('产品', 'products', 'product'), ('项目', 'projects', 'project'), ('执行', 'executions', 'execution')):
             i = str(b.get(fld) or '0')
             k = f'{kind}/{i}'
@@ -160,7 +160,7 @@ class ZentaoSource(Source):
         return sel, prods
 
     def sync(self, state, ctx):
-        from . import zentao_api as zentao
+        from kblib.bugs.adapters import zentao_api as zentao
         zt = self.zt
         names = state.setdefault('名称', {})
         cur = state.setdefault('游标', {})

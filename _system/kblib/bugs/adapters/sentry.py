@@ -4,8 +4,8 @@ import re
 import time
 from datetime import datetime
 from urllib.parse import urlencode
-from .base import SourceError, http, local_time
-from .crash import java_stack, native_stack, anr_stack, CrashSource
+from kblib.bugs.adapters.base import SourceError, http, local_time
+from kblib.bugs.adapters.crash import java_stack, native_stack, anr_stack, CrashSource
 
 
 class SentrySource(CrashSource):

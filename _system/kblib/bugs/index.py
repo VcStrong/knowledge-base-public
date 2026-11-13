@@ -4,8 +4,8 @@ import json
 import os
 import re
 import threading
-from ..common import KBError, PERIODS, ROOT, load_settings, now, safe_name, save_settings
-from ..periods import (
+from kblib.core.common import KBError, PERIODS, ROOT, load_settings, now, safe_name, save_settings
+from kblib.core.periods import (
     _guess_task_kind,
     create_task,
     is_task,
@@ -15,12 +15,12 @@ from ..periods import (
     period_names,
     save_meta,
 )
-from ..search import index_docs
-from ..plugins import plugins
-from ..devprep import want_branches
-from ..refresh import _notice
-from ..bugs.sources import _bsrc, _src_call, bug_source, bug_source_conf, bug_sources
-from .. import lazy
+from kblib.core.search import index_docs
+from kblib.plugins.registry import plugins
+from kblib.ai.devprep import want_branches
+from kblib.sources.refresh import _notice
+from kblib.bugs.sources import _bsrc, _src_call, bug_source, bug_source_conf, bug_sources
+from kblib import lazy
 _bug_analysis = lazy('kblib.bugs.analysis')      # 上层模块：用到时才 import（不形成循环）
 _anr_store = lazy('kblib.anr.store')      # 上层模块：用到时才 import（不形成循环）
 

@@ -1,6 +1,6 @@
 # From 大大王.DT
 """崩溃平台的共同部分：统一「问题」格式、把堆栈拼成 Android 日志的样子。"""
-from .base import Source, SourceError
+from kblib.bugs.adapters.base import Source, SourceError
 
 
 # ---------------------------------------------------------------- 崩溃平台：统一产出「问题」

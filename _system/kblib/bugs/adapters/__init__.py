@@ -12,13 +12,13 @@
 
 一个平台一个文件：base（共用）、zentao / jira（缺陷）、crash + sentry / crashlytics / bugly（崩溃）、plugin（插件实现的平台）。
 新增平台：写一个 Source 子类，加进下面的 ADAPTERS。"""
-from .base import PLATFORMS, Cred, Source, SourceError, entry, norm
-from .bugly import BuglySource
-from .crashlytics import CrashlyticsSource
-from .jira import JiraSource
-from .plugin import PluginSource
-from .sentry import SentrySource
-from .zentao import ZentaoSource
+from kblib.bugs.adapters.base import PLATFORMS, Cred, Source, SourceError, entry, norm
+from kblib.bugs.adapters.bugly import BuglySource
+from kblib.bugs.adapters.crashlytics import CrashlyticsSource
+from kblib.bugs.adapters.jira import JiraSource
+from kblib.bugs.adapters.plugin import PluginSource
+from kblib.bugs.adapters.sentry import SentrySource
+from kblib.bugs.adapters.zentao import ZentaoSource
 
 ADAPTERS = {c.adapter: c for c in (ZentaoSource, JiraSource, SentrySource, CrashlyticsSource, BuglySource)}
 

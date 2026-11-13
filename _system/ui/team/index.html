@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI 团队办公室 · 知识库</title>
+<!-- From 大大王.DT -->
+<!-- 界面模板「团队」：整个网站是一间 AI 团队办公室。顶部是空间导航 + 团队栏（每个 AI 一个头像，带实时状态），
+     下面是当前空间的分段导航和内容。契约见 /ui/core.js 顶部；骨架和首页在 app.js，皮肤在 skin.css -->
+<link rel="stylesheet" href="/ui/core.css">
+<link rel="stylesheet" href="/ui/team/skin.css">
+</head>
+<body class="tpl-body">
+<header class="tpl-top">
+  <div class="tpl-top-in">
+    <a class="tpl-brand" href="#/" title="回到团队墙"><span class="tpl-logo" aria-hidden="true">KB</span><span class="tpl-brand-t">AI 团队办公室</span></a>
+    <nav class="tpl-spaces" id="tplSpaces" aria-label="空间"></nav>
+    <span class="tpl-top-sp"></span>
+    <form id="sf" class="tpl-search" role="search"><input type="text" id="q" placeholder="搜索资料、文档、代码" aria-label="搜索"><select id="scope" aria-label="搜索范围"><option value="all">全部</option><option value="docs">文档</option><option value="code">代码</option></select></form>
+    <button type="button" class="tpl-icobtn" id="tplSearchBtn" title="搜索" aria-label="搜索">⌕</button>
+    <span id="live" class="live" title="实时连接"></span>
+    <button type="button" class="tpl-askbtn" id="tplAsk" title="交给管家：贴需求、日志、Bug 链接、账号，或拖文件进来">交给管家</button>
+  </div>
+  <div class="tpl-crew" id="tplCrew" aria-label="AI 团队"></div>
+</header>
+<nav class="tpl-sub" id="tplSub" aria-label="当前空间"></nav>
+<main id="tplApp"></main>
+<div class="tpl-scrim" id="tplScrim" hidden></div>
+<aside class="tpl-drawer" id="tplDrawer" hidden aria-label="AI 成员的工作流"></aside>
+<script src="/ui-templates.js"></script>
+<script src="/ui/core.js"></script>
+<script src="/ui/team/app.js"></script>
+</body>
+</html>

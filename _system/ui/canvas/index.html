@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>知识库 · 画布</title>
+<!-- From 大大王.DT -->
+<!-- 界面模板「画布」：整个网站是一张可以缩放的项目地图。契约见 /ui/core.js 顶部。
+     骨架：#tplStage（固定在底下的画布）→ #tplTools（左上角浮动工具条）→ #tplDrawer（从右侧滑入的上下文抽屉，core 页面画在里面的 #tplApp）
+     → #tplInsight（右下角 AI 洞察）。抽屉在文档流里，页面靠 window 滚动（softRender 恢复的就是 window 的滚动位置） -->
+<link rel="stylesheet" href="/ui/core.css">
+<link rel="stylesheet" href="/ui/canvas/skin.css">
+</head>
+<body class="tpl-body">
+<div id="tplStage" class="tpl-stage" aria-label="项目地图：拖动平移，Ctrl + 滚轮或双指缩放">
+  <div id="tplWorld" class="tpl-world">
+    <div id="tplZones" class="tpl-zones"></div>
+    <svg id="tplEdges" class="tpl-edges" width="1" height="1" aria-hidden="true"></svg>
+    <div id="tplNodes" class="tpl-nodes"></div>
+    <svg id="tplFEdges" class="tpl-edges tpl-fedges" width="1" height="1" aria-hidden="true"></svg>
+    <div id="tplFocus" class="tpl-focus"></div>
+  </div>
+</div>
+
+<div id="tplTools" class="tpl-tools" role="toolbar" aria-label="画布工具">
+  <a class="tpl-brand" href="#/" title="回到全局画布"><i class="tpl-logo" aria-hidden="true"></i><b>知识库</b><span class="tpl-brand-s">画布</span></a>
+  <form id="sf" class="tpl-sf" role="search"><span aria-hidden="true">⌕</span><input type="text" id="q" placeholder="搜索资料、代码…  /" aria-label="搜索"></form>
+  <button type="button" class="tpl-tb tpl-tb-ask" id="tplAsk" title="交给管家：贴需求、日志、Bug 链接、文件，它归档并接着推动"><span aria-hidden="true">✦</span><span class="tpl-tl">交给管家</span></button>
+  <span class="tpl-tsep" aria-hidden="true"></span>
+  <span class="tpl-tgrp tpl-desk">
+    <button type="button" class="tpl-tb" id="tplFilterBtn" title="筛选节点" aria-haspopup="true"><span aria-hidden="true">⚲</span><span class="tpl-tl" id="tplFilterLbl">全部</span></button>
+    <button type="button" class="tpl-tb" id="tplPlacesBtn" title="地点：Bug、ANR、手机、基础信息、设置、文档、工具，和新建" aria-haspopup="true"><span aria-hidden="true">◫</span><span class="tpl-tl">地点</span></button>
+    <span class="tpl-zoom"><button type="button" class="tpl-tb" data-zoom="-" title="缩小（-）" aria-label="缩小">−</button><button type="button" class="tpl-tb" data-zoom="fit" title="适应屏幕（0）" aria-label="适应屏幕">⤢</button><button type="button" class="tpl-tb" data-zoom="+" title="放大（+）" aria-label="放大">+</button></span>
+    <a class="tpl-tb" href="#/list" id="tplListBtn" title="切换到列表"><span aria-hidden="true">☰</span><span class="tpl-tl">列表</span></a>
+    <button type="button" class="tpl-tb" id="tplTheme" title="深色 / 浅色 / 跟随系统" aria-label="切换主题">◐</button>
+  </span>
+  <button type="button" class="tpl-tb tpl-mob" id="tplMoreBtn" title="更多" aria-haspopup="true" aria-label="更多">⋯</button>
+  <span id="live" class="live" title="实时连接"></span>
+</div>
+<div id="tplPop" class="tpl-pop" hidden></div>
+
+<aside id="tplDrawer" class="tpl-drawer" aria-label="上下文面板">
+  <div class="tpl-dhd">
+    <nav class="tpl-crumb" id="tplCrumb" aria-label="位置"></nav>
+    <span class="tpl-sp"></span>
+    <button type="button" class="tpl-tb tpl-peekbtn" id="tplPeek" title="收起详情，看这一期的关系图"><span aria-hidden="true">◎</span> 关系图</button>
+    <button type="button" class="tpl-tb" id="tplWide" title="加宽 / 收窄抽屉" aria-label="加宽或收窄">⇔</button>
+    <a class="tpl-tb tpl-x" href="#/" id="tplClose" title="收起，回到画布（Esc）" aria-label="收起">✕</a>
+  </div>
+  <main id="tplApp"></main>
+</aside>
+
+<button type="button" class="tpl-unpeek" id="tplUnpeek">回到详情 ›</button>
+<section id="tplInsight" class="tpl-insight" aria-live="polite" aria-label="AI 洞察"></section>
+<div id="tplLegend" class="tpl-legend" aria-hidden="true"><span><i class="g"></i>AI 在做</span><span><i class="a"></i>需要你判断</span><span><i class="m"></i>缺东西</span><span><i class="b"></i>出问题</span></div>
+
+<script src="/ui-templates.js"></script>
+<script src="/ui/core.js"></script>
+<script src="/ui/canvas/app.js"></script>
+</body>
+</html>

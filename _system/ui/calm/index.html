@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
+<title>知识库 · 静默</title>
+<!-- From 大大王.DT -->
+<!-- 界面模板「静默」的整站页面：安静的背景 + 居中的纸面 + 底部悬浮坞。契约见 /ui/core.js 顶部 -->
+<script>/* 先套上记住的浅色 / 深色，避免闪一下 */try{var t=localStorage.getItem('kb.calm.theme');if(t)document.documentElement.dataset.theme=t}catch(_){}</script>
+<link rel="stylesheet" href="/ui/core.css">
+<link rel="stylesheet" href="/ui/calm/skin.css">
+</head>
+<body>
+<div class="tpl-sky" aria-hidden="true"><i></i><i></i><i></i></div>
+
+<header class="tpl-top" id="tplTop">
+  <a class="tpl-mark" href="#/" title="回到安静的首页"><span class="tpl-mdot" id="tplMdot"></span><span>知识库</span></a>
+  <nav class="tpl-crumb" id="tplCrumb" aria-label="当前位置"></nav>
+  <span class="tpl-tr">
+    <span id="live" class="live" title="实时连接"></span>
+    <button type="button" class="tpl-ghost" id="tplTheme" title="浅色 / 深色 / 跟随系统">◐</button>
+  </span>
+</header>
+
+<main id="tplApp" class="tpl-page"></main>
+
+<!-- 坞弹出的浮层：三块面板都常驻（搜索表单 #sf 要在 core 启动时就在） -->
+<div class="tpl-pop" id="tplPop" hidden>
+  <section class="tpl-pane" data-pane-k="proj" id="tplPopProj" hidden></section>
+  <section class="tpl-pane" data-pane-k="issue" id="tplPopIssue" hidden></section>
+  <section class="tpl-pane" data-pane-k="mat" hidden>
+    <div class="tpl-ph"><b>资料</b><span class="tpl-mut">搜一搜，或者翻翻基础信息和文档</span></div>
+    <form id="sf" class="tpl-sf" role="search">
+      <input type="text" id="q" placeholder="搜索资料、文档、代码…" autocomplete="off" aria-label="搜索">
+      <select id="scope" aria-label="范围"><option value="all">全部</option><option value="docs">资料</option><option value="code">代码</option></select>
+    </form>
+    <div id="tplPopMat"></div>
+  </section>
+</div>
+
+<nav class="tpl-dock" id="tplDock" aria-label="主导航">
+  <a class="tpl-dk tpl-dk-home" data-k="home" href="#/" title="首页：AI 团队的状态"><span class="tpl-orbm" id="tplOrbm"></span><em>此刻</em></a>
+  <button type="button" class="tpl-dk" data-k="ask" title="交给我：贴需求、日志、Bug、账号，或拖文件进来">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v10M7.5 9.5 12 14l4.5-4.5M5 19h14"/></svg><em>交给我</em></button>
+  <button type="button" class="tpl-dk" data-k="proj" title="项目：各期和事项">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="3"/><path d="M4 10h16"/></svg><em>项目</em><i class="tpl-ping"></i></button>
+  <button type="button" class="tpl-dk" data-k="issue" title="问题：Bug、ANR / 崩溃">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v4.5M12 15.8v.2"/></svg><em>问题</em><i class="tpl-ping"></i></button>
+  <button type="button" class="tpl-dk" data-k="mat" title="资料：搜索、基础信息、文档、手机、工具">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h9l3 3v13H6z"/><path d="M9 11h6M9 15h6"/></svg><em>资料</em></button>
+  <a class="tpl-dk" data-k="set" href="#/settings" title="设置">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg><em>设置</em></a>
+</nav>
+
+<script src="/ui-templates.js"></script>
+<script src="/ui/core.js"></script>
+<script src="/ui/calm/app.js"></script>
+</body>
+</html>

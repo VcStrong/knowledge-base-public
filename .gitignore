@@ -12,10 +12,15 @@
 !/_system/kb.py
 !/_system/kblib/
 !/_system/web.py
+!/_system/webapp/
 !/_system/web.html
+!/_system/ui-templates.js
+!/_system/ui-preview.html
+!/_system/ui/
 !/_system/requirements.txt
 !/_system/bin/
 !/tools/
 /tools/*
 !/tools/make-public.py
+!/tools/check-arch.py
 __pycache__/

@@ -9,7 +9,7 @@ from html import unescape
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urljoin, urlparse
-from . import vault
+from kblib.infra import vault
 
 UA = 'kb-local/1.0'
 MAX_DOWNLOAD = 100 * 1024 * 1024

@@ -9,15 +9,15 @@ import threading
 import time
 from datetime import datetime
 from pathlib import Path
-from ..common import KBError, PERIODS, now, uuid_hex
-from ..periods import load_meta, log, period_dir, period_names
-from ..engines import engine_popen, role_engine
-from ..devprep import _git
-from .. import hosts
-from ..devsession import _alive, _dev_env
-from ..devices import dev_activity
-from ..bugs.index import ZT_DIR, _zt_recheck, an_skip, zt_load, zt_save
-from ..bugs.analysis import _AN, _an_finish, _an_load, _an_md, _an_save, _bug_repo, _fx_heal, an_sessions
+from kblib.core.common import KBError, PERIODS, now, uuid_hex
+from kblib.core.periods import load_meta, log, period_dir, period_names
+from kblib.ai.engines import engine_popen, role_engine
+from kblib.ai.devprep import _git
+from kblib.infra import hosts
+from kblib.ai.devsession import _alive, _dev_env
+from kblib.ai.devices import dev_activity
+from kblib.bugs.index import ZT_DIR, _zt_recheck, an_skip, zt_load, zt_save
+from kblib.bugs.analysis import _AN, _an_finish, _an_load, _an_md, _an_save, _bug_repo, _fx_heal, an_sessions
 
 
 FX_MAX_BUGS = 5
@@ -82,7 +82,11 @@ def _fx_last(e):
     p = (e.get('修复') or {}).get('上次')
     if not p:
         return ''
-    return f'\n  上一次修复没修成（{p.get("时间")}）：{p.get("说明")}\n  这次按最新的审核意见改，不要重复上次走不通的做法。'
+    out = f'\n  上一次修复没修成（{p.get("时间")}）：{p.get("说明")}\n  这次按最新的审核意见改，不要重复上次走不通的做法。'
+    if p.get('遗留'):
+        out += (f'\n  上次会话留下的半成品已收起：{p["遗留"]}。先看一眼（git stash show -p / 打开补丁），'
+                '合适就拿来接着改（git stash apply / svn patch），不合适就重新改；不要删掉它。')
+    return out
 
 
 def set_fix_note(e, note, by):
@@ -124,7 +128,8 @@ def bug_fix(ids, by='用户（网页）', note=None):
                 if not root:
                     skipped.append(f'{bid}：不知道在哪个仓库修')
                     continue
-                last = {'时间': f.get('时间') or '', '说明': f.get('说明') or ''} if f.get('状态') == '未完成' and f.get('说明') else f.get('上次')
+                last = ({'时间': f.get('时间') or '', '说明': f.get('说明') or '', **({'遗留': f['遗留']} if f.get('遗留') else {})}
+                        if f.get('状态') == '未完成' and f.get('说明') else f.get('上次'))
                 if note is not None and len(ids) == 1 and set_fix_note(e, note, by):
                     _fx_log(e, f'审核意见改为：{a["意见"]}（{by}）')
                     _an_md(e)
@@ -248,12 +253,13 @@ def _fx_start(root, branch, part, by='修复队列'):
     logf = ZT_DIR / '分析会话' / f'修复-{sid}.jsonl'
     up = hosts.sync(root, 'svn' if _is_svn(root) else 'git')      # 开发前更新代码（队列已保证分支对、工作区干净）
     head = hosts.head(root, 'svn') if _is_svn(root) else _git(rp, 'rev-parse', 'HEAD').stdout.strip()
+    untracked = [] if _is_svn(root) else _untracked(root)          # 结束时只收会话新建的未跟踪文件，用户原有的不动
     o = part[0].get('归属') or {}
     proc = engine_popen(eng, _fx_prompt(root, branch, part), f'kb·修复·Bug {"、".join(e["编号"] for e in part)}', logf, root,
                         env_extra=dict(_dev_env(o.get('名称') or 'Bug 修复', branch, root), KB_SESSION='an:' + sid))
     _AN[sid] = proc
     rec = {'编号': sid, '类型': '修复', 'pid': proc.pid, '状态': '运行中', '开始时间': now(), '仓库': root, '分支': branch,
-           '起点': head, '更新代码': up, 'Bug': [e['编号'] for e in part], '日志': str(logf), '引擎': eng['名称'], '发起': by}
+           '起点': head, '更新代码': up, '未跟踪前': untracked, 'Bug': [e['编号'] for e in part], '日志': str(logf), '引擎': eng['名称'], '发起': by}
     allx = _an_load()
     allx.append(rec)
     _an_save(allx)
@@ -280,6 +286,84 @@ def _fx_log(e, text):
             log(period_dir(o['名称']), 'Bug 修复', f'Bug {e["编号"]} {e["标题"]}：{text}')
         except KBError:
             pass
+
+
+def _untracked(root):
+    """git 仓库里的未跟踪文件（不含 .gitignore 忽略的）。"""
+    try:
+        p = hosts.git(root, 'ls-files', '--others', '--exclude-standard', '-z')
+    except KBError:
+        return []
+    return [s for s in p.stdout.split('\0') if s] if p.returncode == 0 else []
+
+
+def _shelve_git(root, x, label):
+    tracked = hosts.git(root, 'status', '--porcelain', '--untracked-files=no').stdout.strip()
+    before = set(x.get('未跟踪前') or [])
+    new = [p for p in _untracked(root) if p not in before] if '未跟踪前' in x else []    # 老会话没记，不碰未跟踪文件
+    if not tracked and not new:
+        return ''
+    if new:
+        r = hosts.git(root, 'add', '--', *new)
+        if r.returncode:
+            raise KBError(f'git add 会话新建的文件失败：{(r.stderr or r.stdout).strip()[-300:]}')
+    r = hosts.git(root, 'stash', 'push', '-m', label)
+    if r.returncode:
+        if new:
+            hosts.git(root, 'reset', '-q', '--', *new)          # 撤回上面的 add，保持原样
+        raise KBError(f'git stash 失败：{(r.stderr or r.stdout).strip()[-300:]}')
+    ref = hosts.git(root, 'rev-parse', '--short', 'stash@{0}').stdout.strip()
+    return f'git stash「{label}」（{ref}，git stash list 里找这条）'
+
+
+def _shelve_svn(root, sid, data, label):
+    keep = {p for e in data['Bug'].values() if (e.get('修复') or {}).get('仓库') == root
+            for p in (e['修复'].get('待提交') or [])}            # 修好了等提交到 svn 的文件不动
+    ch = [pth for _, pth in hosts.svn_changes(root)[0] if pth not in keep]
+    if not ch:
+        return ''
+    d = hosts.svn(root, 'diff', *ch)
+    if d.returncode:
+        raise KBError(f'svn diff 失败：{(d.stderr or d.stdout).strip()[-300:]}')
+    if re.search(r'^(Cannot display: file marked as a binary type|无法显示)', d.stdout, re.M):     # svn 输出可能是中文
+        raise KBError('有二进制文件改动，补丁存不下，没有收起')
+    pf = ZT_DIR / '分析会话' / f'修复-{sid}-遗留.patch'
+    pf.parent.mkdir(parents=True, exist_ok=True)
+    pf.write_text(d.stdout, 'utf-8')
+    r = hosts.svn(root, 'revert', '--depth', 'infinity', *ch)
+    if r.returncode:
+        raise KBError(f'svn revert 失败（补丁已存到 {pf}）：{(r.stderr or r.stdout).strip()[-300:]}')
+    return f'补丁 {pf}（{label}；在工作副本根目录 svn patch 它即可恢复，svn add 的新文件 revert 后还留在磁盘上，要用就重新 svn add）'
+
+
+def fx_shelve(x, data):
+    """修复会话结束后工作区还有改动 → 收起来，不卡后面的修复队列（开始前队列保证过干净，所以都是这个会话留下的）。
+    git：会话新建的未跟踪文件 git add 后 git stash push；svn：「待提交」的文件不动，其余存成补丁后 svn revert。
+    收在哪记到没修成的 Bug 的 修复.遗留 和会话记录的 遗留；收不起来保持原样（队列照旧提示），记到 遗留失败。
+    x：会话记录，data：zt_load() 的数据，都由调用方保存。返回给通知用的一句话（没有遗留就是空串）。"""
+    root, sid = x.get('仓库') or '', x['编号']
+    if not root or not Path(root).is_dir():
+        return ''
+    mine = [data['Bug'][b] for b in x['Bug'] if (data['Bug'].get(b, {}).get('修复') or {}).get('会话') == sid]
+    left = [e for e in mine if e['修复'].get('状态') != '已修复']
+    label = f'kb 修复会话 {sid} 遗留（Bug {"、".join(e["编号"] for e in (left or mine)) or "、".join(x["Bug"])}）'
+    try:
+        with _FX_LOCK:
+            where = _shelve_svn(root, sid, data, label) if _is_svn(root) else _shelve_git(root, x, label)
+    except Exception as ex:                  # 收不起来：保持原样，队列照旧提示「有未提交的改动」
+        msg = str(ex) if isinstance(ex, KBError) else repr(ex)
+        x['遗留失败'] = msg
+        for e in (left or mine[:1]):
+            _fx_log(e, f'修复会话 {sid} 留下的改动没能自动收起：{msg}；请手动处理')
+        return f'；⚠ 遗留改动没收起：{msg}'
+    if not where:
+        return ''
+    x['遗留'] = where
+    for e in left:
+        e['修复']['遗留'] = where
+    for e in (left or mine[:1]):
+        _fx_log(e, f'修复会话 {sid} 结束时工作区还有改动，已收起：{where}')
+    return f'；遗留改动已收起（{where}）'
 
 
 def bug_fixed(bid, done=True, commits=None, note='', by='Claude', files=None):

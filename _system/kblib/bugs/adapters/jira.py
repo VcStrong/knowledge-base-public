@@ -7,7 +7,7 @@ import time
 from datetime import datetime
 from urllib.parse import quote
 from urllib.parse import urlencode
-from .base import (
+from kblib.bugs.adapters.base import (
     Source,
     SourceError,
     brief,

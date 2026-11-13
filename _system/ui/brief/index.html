@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>知识库简报</title>
+<!-- From 大大王.DT -->
+<!-- 界面模板「简报」：整站像一份 AI 每天编辑的刊物。报头 + 横向栏目（今日 / 项目 / 问题 / 资料 / 设置），没有侧栏。契约见 /ui/core.js 顶部 -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%231a1712'/%3E%3Ctext x='16' y='23' font-size='19' text-anchor='middle' fill='%23f6f1e7' font-family='serif' font-weight='700'%3E%E7%AE%80%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@500;700;900&display=swap">
+<link rel="stylesheet" href="/ui/core.css">
+<link rel="stylesheet" href="/ui/brief/skin.css">
+</head>
+<body class="tpl-body">
+<div class="tpl-paper">
+  <header class="tpl-mast" id="tplMast">
+    <div class="tpl-mast-top">
+      <span class="tpl-dateline" id="tplDate"></span>
+      <span class="tpl-mast-st" id="tplState"><span class="live" id="live" title="实时连接"></span><span id="tplStateTx">AI 编辑部连线中…</span></span>
+    </div>
+    <div class="tpl-mast-mid">
+      <a class="tpl-title" href="#/" title="回到今日">知识库<span class="tpl-title-dot">·</span>简报</a>
+      <div class="tpl-mast-sub"><span class="tpl-motto">AI 团队编辑 · 你来拍板</span><span class="tpl-edtime" id="tplEdTime"></span></div>
+    </div>
+  </header>
+  <nav class="tpl-secnav" id="tplSecNav" aria-label="栏目">
+    <div class="tpl-secnav-in">
+      <div class="tpl-secs" id="tplSecs"></div>
+      <form id="sf" class="tpl-search" role="search"><input type="text" id="q" placeholder="检索本刊…" aria-label="搜索"><select id="scope" aria-label="范围"><option value="all">全部</option><option value="docs">资料</option><option value="code">代码</option></select></form>
+      <button type="button" class="tpl-askbtn" id="tplAsk" title="交给管家：贴需求、日志、Bug 链接、账号，或拖文件进来">✎ 交给管家</button>
+    </div>
+    <div class="tpl-sub" id="tplSub"></div>
+  </nav>
+  <main id="tplApp" class="tpl-main"></main>
+  <footer class="tpl-colophon">
+    <div><b>版权页</b>　本刊由 AI 团队实时编辑，所有结论都附出处；需要判断的事会以「编者按」出现，按钮在你手里。</div>
+    <div class="tpl-colo-links"><a href="#/classic">经典总览</a><a href="/?ui=classic" title="临时看经典版，不改设置">经典版</a><a id="tplBack" title="把界面换回经典（改设置）">换回经典</a><a href="#/settings">换界面</a><a id="tplLogout" hidden>退出登录</a></div>
+  </footer>
+</div>
+<script src="/ui-templates.js"></script>
+<script src="/ui/core.js"></script>
+<script src="/ui/brief/app.js"></script>
+</body>
+</html>

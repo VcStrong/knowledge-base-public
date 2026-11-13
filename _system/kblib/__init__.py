@@ -1,18 +1,35 @@
 # From 大大王.DT
-"""知识库程序（kb.py / web.py 的实现）。分层，下层不 import 上层（个别上层调用写成「模块.函数」，调用时才取）：
+"""知识库程序的业务层。按领域分包，分五层，下层不在模块顶部 import 上层（要用写 lazy('kblib.x.y')，调用时才取）：
 
-  common            路径、错误、小工具、设置文件
-  infra/            独立小工具：设备占用锁（devlock，bin/adb 也用）、网页抓取（fetch）
-  textx  search     文本提取；全文索引 / 检索
-  periods notes repos baseinfo     期 / 事项、文字资料、代码仓库、基础知识库
-  flows engines plugins            开发流程、AI 引擎、插件
-  overview devprep devsession devices   网页总览、开发准备、开发会话、手机 / 问题 / 复测
-  urlimport refresh quickadd fixlink    网址导入、来源刷新、模糊添加、更正链接
-  bugs/             Bug 平台：sources（接入的平台、账号）、index（同步 / 索引 / 归属）、analysis（只读分析）、fix（修复队列）、adapters/（各平台）
-  anr/              ANR / 崩溃：parse（解析、签名、mapping 还原）、store（归并、问题、平台同步）
-  mcp  cli          对外接口：MCP 工具、命令行
+  层 0  基础
+    core/      common（路径、设置、错误）、periods（期 / 事项）、notes（文字资料、资料文件）、repos（代码仓库）、
+               search（全文索引）、textx（文本提取）、baseinfo（基础信息：账号、环境）
+    infra/     hosts（本机 / 远程、git / svn）、deploy（服务器部署、登录、令牌）、devlock（手机占用锁，bin/adb 也用）、
+               fetch（网页抓取）、vault（机密存储）
+  层 1  能力
+    ai/        engines（AI 引擎、角色）、flows（开发流程）、devprep（开发准备）、devsession（开发会话）、
+               devices（手机、问题、复测）、talk（期页面对话）
+    plugins/   registry（发现、挂载、配置）、run（按时机运行）、builds（构建插件）、stats（统计插件）
+    sources/   urlimport（网址导入）、refresh（来源刷新）、fixlink（更正链接）、quickadd（模糊添加）
+  层 2  领域
+    bugs/      sources（接入的平台）、index（同步、索引、归属）、analysis（只读分析）、fix（修复队列）、adapters/（各平台）
+    anr/       parse（解析、签名、mapping 还原）、store（归并、问题）、manual（自建问题）
+    tasks/     memo（事项记事本、推动）
+    stack/     plan（出方案、拍板）、dev（各端开发、审查、验收）、guide（每一期的下一步）
+  层 3  管家
+    steward/   patrol（巡检、自主动作）、chat（交给管家）、intake（统一收件）、brief（智能状态、界面模板清单）、
+               site（整站导航）、onboard（首次引导、示例期、目录浏览）
+  层 4  对外
+    api/       mcp（MCP 工具）、cli（命令行）、overview（总览和开发包文本）
+  网页接口在 _system/webapp/（routes/ 按领域一个文件），前端在 _system/ui/（core/ 共用功能层 + 每套界面模板一个目录）。
 
-kb.py 是入口：把各模块的名字汇总导出（web.py 和插件按 kb.xxx 用），命令行 / MCP 从这里启动。
+约定
+  - 命名：包和模块用领域名词；对外函数 <领域>_<动作>（bug_analyze、stack_plan_start、steward_tick），
+    模块内部函数下划线开头；数据字段用中文（和 JSON 文件、网页一致）。
+  - kb.py 把各模块的公开函数合到一个命名空间（kb.xxx），公开函数不能重名（导入时会报错）。
+  - 新功能放进对应领域的包；跨领域只读数据用对方的公开函数，不直接读对方的 JSON 文件。
+  - 给管家、各套界面用的东西产出成「智能状态」的五种素材之一（steward/brief.py：判断、活动、关系、指标、叙述）。
+  - 改完跑 python3 tools/check-arch.py：分层、重名、接口、前端语法、模板目录。
 """
 import importlib
 

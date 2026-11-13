@@ -1,7 +1,7 @@
 # From 大大王.DT
 """「Bug平台」插件：公司 / 小组特有的系统按同一协议实现，知识库用子进程调用。"""
 import json
-from .base import Source, SourceError, entry
+from kblib.bugs.adapters.base import Source, SourceError, entry
 
 
 # ---------------------------------------------------------------- 插件实现的平台（公司 / 小组特有的系统）

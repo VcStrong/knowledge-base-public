@@ -7,10 +7,10 @@ import threading
 import zipfile
 from datetime import datetime
 from pathlib import Path
-from ..common import KBError, PERIODS, ROOT, now, read_text, safe_name
-from ..periods import create_task, is_task, load_meta, log, period_dir, period_names
-from ..search import index_docs
-from ..refresh import _notice
+from kblib.core.common import KBError, PERIODS, ROOT, now, read_text, safe_name
+from kblib.core.periods import create_task, is_task, load_meta, log, period_dir, period_names
+from kblib.core.search import index_docs
+from kblib.sources.refresh import _notice
 
 
 # 样本原文存在 ANR崩溃/样本/（用户给的日志，本来就是资料），归并结果存 样本.json；问题和事项的关联、忽略存 问题.json。
@@ -93,7 +93,7 @@ def _ar_map_file(ver):
 
 def _ar_analyze(evs):
     """evs: [(ev, 版本)] → [分析结果]；同一版本的 mapping 只读一遍。"""
-    from ..anr import parse as anr
+    from kblib.anr import parse as anr
     need = {}
     for ev, ver in evs:
         if _ar_map_file(ver):
@@ -103,7 +103,7 @@ def _ar_analyze(evs):
 
 
 def _ar_record(s, r, ver):
-    from ..anr import parse as anr
+    from kblib.anr import parse as anr
     s.update({k: r[k] for k in ('类型', '签名', '标题', '原因', '关键堆栈', '已还原', '应用帧')})
     s['版本'] = ver
     s['问题'] = anr.sig_id(r['签名'])
@@ -114,7 +114,7 @@ def _ar_record(s, r, ver):
 
 def anr_add(paths, version='', source='', task='', count=1, by='Claude'):
     """归档 ANR / 崩溃日志：拆成一次次事件，按堆栈签名合并到「问题」，累计次数。"""
-    from ..anr import parse as anr
+    from kblib.anr import parse as anr
     if isinstance(paths, str):
         paths = [paths]
     if not paths:
@@ -186,7 +186,7 @@ def anr_add(paths, version='', source='', task='', count=1, by='Claude'):
 def anr_platform_upsert(sid, items, by='平台同步'):
     """崩溃平台同步来的问题 → 样本：每个平台问题一个样本（外部键 来源:问题ID），次数 / 用户数取平台上的累计值（覆盖，不累加）。
     堆栈交给 anr.analyze 算签名，和手动导入的 traces 按签名合并；没给堆栈的按平台问题单独成一个问题。"""
-    from ..anr import parse as anr
+    from kblib.anr import parse as anr
     new = upd = 0
     with _AR_LOCK:
         samples = _ar_load()
@@ -276,7 +276,7 @@ def anr_set_version(target, version, by='Claude'):
 
 
 def _ar_reprocess(pred, version=None):
-    from ..anr import parse as anr
+    from kblib.anr import parse as anr
     with _AR_LOCK:
         samples = _ar_load()
         todo = [s for s in samples if pred(s) and s.get('类型') != '手动']     # 手动建的没有堆栈，不重算

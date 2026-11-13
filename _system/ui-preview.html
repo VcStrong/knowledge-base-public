@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>界面模板预览</title>
+<style>
+/* 设置里切换界面模板时的示例预览：示例数据按 5 个阶段编好，模板代码和真实总览是同一份（/ui-templates.js） */
+:root{--bg:#f3f5f9;--fg:#1c2433;--mut:#667085;--card:#ffffff;--line:#e3e7ef;--soft:#eef1f6;--acc:#3b5bdb;--accb:#e7ecfd;color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f141d;--fg:#e6eaf2;--mut:#98a2b3;--card:#171e2a;--line:#283245;--soft:#1e2635;--acc:#7c97ff;--accb:#1f2a4d;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0f141d;--fg:#e6eaf2;--mut:#98a2b3;--card:#171e2a;--line:#283245;--soft:#1e2635;--acc:#7c97ff;--accb:#1f2a4d;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.55 -apple-system,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif}
+.wrap{padding-block:14px 20px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.bar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:12px;font-size:12px;color:var(--mut)}
+.bar button{border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:999px;padding:4px 12px;font:inherit;cursor:pointer}
+.bar button[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.desc{font-size:12px;color:var(--mut);margin:-4px 0 12px}
+.demo{position:relative}
+.demo::after{content:"示例数据";position:absolute;bottom:8px;left:10px;font-size:11px;color:var(--mut);background:var(--card);border:1px solid var(--line);border-radius:6px;padding:1px 6px;pointer-events:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="bar" id="bar"></div>
+  <div class="desc" id="desc"></div>
+  <div class="demo" id="view"></div>
+</div>
+<script src="/ui-templates.js"></script>
+<script>
+const STAGES=[['collect','收集资料','刚丢进一个需求链接和几张截图，AI 在理解需求、找缺口'],['plan','方案拍板','方案 AI 写完了方案，等你判断'],['dev','并行开发','三个端的 AI 在写代码，iOS 遇到设计稿没覆盖的情况'],['accept','验收上线','各端完成，审查通过 18/20 条，等你判断能不能上线'],['online','线上维护','上线后新进 2 个 ANR、3 个 Bug']];
+const qs=new URLSearchParams(location.search);
+let tpl=qs.get('t')||'指挥台', stage=qs.get('stage')||'dev';
+const J=(id,问题,建议,理由,把握,备选,说明)=>({id,类型:'问你',问题,建议,理由,把握,主动作:'do',备选:(备选||[]).map(x=>({标签:x,动作:'dismiss'})),说明:说明||'',链接:'#'});
+const A=(角色,颜色,对象,状态,步骤,等你)=>({id:角色,角色,颜色,对象,状态,步骤,等你:!!等你,链接:'#'});
+const C={'方案':'#8b5cf6','服务端':'#0ea5e9','Android':'#16a34a','iOS':'#64748b','审查':'#f59e0b','Bug 分析':'#ef4444','整理':'#14b8a6'};
+const node=(id,类,名称,说明,状态)=>({id,类,名称,说明,状态});
+const steps=k=>['资料','选仓库','出方案','拍板','开发','验收'].map((n,i)=>({名称:n,状态:i<k?'done':i===k?'cur':'todo'}));
+const EDG=[['req','des'],['req','api'],['req','ct'],['des','ct'],['api','ct'],['ct','e:服务端'],['ct','e:Android'],['ct','e:iOS']];
+const DEMO={
+ collect:{问候:'需求我在看了，还差设计稿。',状态:{名称:'等你判断',在工作:1,今天完成:4,等你:1},
+   判断:[J('d1','互动榜按「近 7 天」还是「本周」统计？','近 7 天','PRD 写的是「最近一周」，同类的签到榜用的是近 7 天滚动；本周口径周一清零，体验割裂。',78,['本周','先问产品'])],
+   活动:[A('整理',C['整理'],'首页互动榜','理解需求',['读 PRD 第 2/5 节','抽出 9 条需求','原型图 3 张 → 页面结构','发现：没有设计稿'])],
+   关系:{标题:'首页互动榜',链接:'#',步骤:steps(0),洞察:{标题:'还缺设计稿和接口文档',内容:'需求里 3 处提到「排名动效」，没有设计稿方案会卡住。'},节点:[node('req','需求','需求','9 条','hot'),node('des','设计','设计稿','还没有','miss'),node('api','接口','接口文档','还没有','miss'),node('ct','契约','方案 · 接口契约','未出','dim')],边:EDG.slice(0,5)},
+   叙述:{标题:'互动榜的需求已经理解清楚，开工前还差设计稿',正文:'我读完了 PRD 和 3 张原型图[1]，拆出 9 条需求。最大的缺口是「排名动效」没有设计稿；补齐后我大约半天能出方案。相似的「签到榜」上个月做过[2]，方案会复用它的接口结构。',引用:[{文字:'PRD · 互动榜'},{文字:'期「连续签到奖励」'}]},
+   指标:[{名称:'资料完整度',值:'60',单位:'%',趋势:[20,30,30,45,60]},{名称:'管家近 7 天替你做的事',值:'23',单位:'件',趋势:[2,4,3,5,2,3,4]}]},
+ plan:{问候:'互动榜的方案好了，有一处需要你判断。',状态:{名称:'等你判断',在工作:1,今天完成:6,等你:1},
+   判断:[J('d1','方案可以定下来吗？','可以，按方案 v1 开工','14 条需求都有对应的接口和页面；设计稿和需求有 3 处不一致，方案已按需求取舍并标注。',86,['看 3 处取舍','写意见重出'])],
+   活动:[A('方案',C['方案'],'直播礼物连击','出方案中',['读 server/gift/*.py','读 app/live/*.kt','写接口契约 5/8'])],
+   关系:{标题:'首页互动榜',链接:'#',步骤:steps(3),洞察:{标题:'改动集中在排行模块',内容:'服务端 1 个服务、Android 2 个页面、iOS 1 个页面，不碰支付。'},节点:[node('req','需求','需求','14 条',''),node('des','设计','设计稿','Figma',''),node('api','接口','接口文档','2 份',''),node('ct','契约','方案 · 接口契约','12 个接口','core'),node('e:服务端','端','服务端','rank_api','hot'),node('e:Android','端','Android','HomeRank','hot'),node('e:iOS','端','iOS','RankView','hot')],边:EDG},
+   叙述:{标题:'方案已经成形：改动集中在排行模块，风险低',正文:'方案 v1 覆盖 14 条需求、12 个接口[1]。改动集中在排行服务和首页两个页面，不涉及支付和账号[2]。设计稿与需求有 3 处不一致，我按需求取舍并做了标注[3]。',引用:[{文字:'方案 v1'},{文字:'影响分析'},{文字:'设计对照'}]},
+   指标:[{名称:'方案覆盖',值:'14/14',趋势:[4,8,11,13,14]},{名称:'影响文件',值:'23',趋势:[5,9,15,20,23]}]},
+ dev:{问候:'三个端都在推进，iOS 有一个小问题想听你的意见。',状态:{名称:'等你判断',在工作:3,今天完成:11,等你:1},
+   判断:[J('d1','榜单为空时显示什么？','复用「暂无数据」通用插图','设计稿没画空态；App 里其他 6 个榜单都用这张图，复用不需要新切图。',91,['等设计补图'])],
+   活动:[A('服务端',C['服务端'],'首页互动榜','审查中',['rank_api.py +142','单测 18/18 通过','提交 a3f91c2']),A('Android',C['Android'],'首页互动榜','开发中 · 70%',['HomeRankFragment.kt','RankAdapter.kt +88','编译通过']),A('iOS',C['iOS'],'首页互动榜','等你判断',['RankView.swift','按契约 mock 接口','空态：设计稿未覆盖'],true),A('审查',C['审查'],'首页互动榜 · 服务端','挑错',['对照需求 R3、R7','服务端：0 个问题'])],
+   关系:{标题:'首页互动榜',链接:'#',步骤:steps(4),洞察:{标题:'iOS 依赖服务端的 3 个接口',内容:'服务端已提交，今晚可以联调。'},节点:[node('req','需求','需求','14 条',''),node('des','设计','设计稿','Figma',''),node('api','接口','接口文档','2 份',''),node('ct','契约','方案 · 接口契约','已拍板','core'),node('e:服务端','端','服务端','审查中','hot'),node('e:Android','端','Android','开发中','hot'),node('e:iOS','端','iOS','要你看','bad')],边:EDG},
+   叙述:{标题:'按现在的速度，周四可以联调',正文:'服务端已提交并通过审查[1]，Android 完成 70%[2]。iOS 在等服务端接口，目前按契约 mock 推进[3]；主要风险是空态设计缺失，需要你一个判断。',引用:[{文字:'服务端 · 提交 a3f91c2'},{文字:'Android 会话'},{文字:'接口契约'}]},
+   指标:[{名称:'整体进度',值:'68',单位:'%',趋势:[10,25,40,55,68]},{名称:'管家近 7 天替你做的事',值:'31',单位:'件',趋势:[3,5,4,6,4,4,5]}]},
+ accept:{问候:'互动榜做完了，我认为可以上线。',状态:{名称:'等你判断',在工作:1,今天完成:18,等你:1},
+   判断:[J('d1','可以上线吗？','可以，推送两个端','18/20 条需求在各端审查通过；剩下 2 条是文案差异，截图已附，不影响功能。',88,['看 2 条差异','先不推'])],
+   活动:[A('审查',C['审查'],'首页互动榜','证据汇总',['R1–R18 ✓','R19、R20 文案差异','截图 × 6'])],
+   关系:{标题:'首页互动榜',链接:'#',步骤:steps(5),洞察:{标题:'18 条需求在三端都有证据',内容:'2 条差异只是文案。'},节点:[node('req','需求','需求','14 条',''),node('ct','契约','方案 · 接口契约','v1','core'),node('e:服务端','端','服务端','审查通过','ok'),node('e:Android','端','Android','审查通过','ok'),node('e:iOS','端','iOS','审查通过','ok'),node('ev','证据','证据包','18/20','hot')],边:EDG.concat([['e:服务端','ev'],['e:Android','ev'],['e:iOS','ev']])},
+   叙述:{标题:'互动榜可以上线',正文:'审查 AI 用另一个模型逐条核对，18/20 条需求在三端都有证据[1]；剩下 2 条是文案差异，不影响功能[2]。构建 #417 通过[3]。',引用:[{文字:'证据包'},{文字:'差异截图'},{文字:'构建 #417'}]},
+   指标:[{名称:'需求通过',值:'18/20',趋势:[6,10,14,17,18]},{名称:'审查问题',值:'0',趋势:[5,3,2,1,0]}]},
+ online:{问候:'新版本有个启动卡顿，原因我找到了。',状态:{名称:'发现问题',在工作:1,今天完成:9,等你:1},
+   判断:[Object.assign(J('d1','首页启动卡顿怎么处理？','在 android-app 的 release-5.2 上修','37 次上报都在 5.2.0；主线程初始化多语言阻塞 1.8 秒，上周同类问题也是在这个分支修的。',83,[]),{主动作:'confirm',提议:{类型:'推动',仓库:[{路径:'/Users/me/code/android-app',名称:'android-app',分支:'release-5.2'}],默认仓库:'/Users/me/code/android-app',默认分支:'release-5.2',条目:['anr:15a0','anr:7b21']}})],
+   活动:[A('Bug 分析',C['Bug 分析'],'ANR 首页启动','只读分析中',['归并 37 次上报','堆栈：MultiLanguage.init','主线程阻塞 1.8s','定位：初始化放到子线程'])],
+   关系:{标题:'直播礼物连击',链接:'#',步骤:steps(4),洞察:{标题:'两个问题都在首页启动链路上',内容:'可能是同一次初始化改动引起的。'},节点:[node('req','需求','需求','8 条',''),node('ct','契约','方案 · 接口契约','已拍板','core'),node('e:Android','端','Android','开发中','hot'),node('e:iOS','端','iOS','开发中','hot'),node('b:1','问题','ANR 首页启动','37 次','bad'),node('b:2','问题','Bug 7712','连击卡顿','bad')],边:[['req','ct'],['ct','e:Android'],['ct','e:iOS'],['e:Android','b:1'],['e:iOS','b:2']]},
+   叙述:{标题:'上线两天，整体健康，有一个启动问题要处理',正文:'新 ANR 2 个、合计 37 次，都在 5.2.0[1]。根因是主线程初始化多语言阻塞 1.8 秒[2]；上周同类问题在 release-5.2 修过[3]。3 个新 Bug 已完成只读分析。',引用:[{文字:'ANR 样本'},{文字:'分析结论'},{文字:'事项「ANR 第八批」'}]},
+   指标:[{名称:'崩溃率',值:'0.21',单位:'%',趋势:[.1,.12,.11,.25,.21]},{名称:'已归并上报',值:'37',单位:'次',趋势:[3,9,18,30,37]}]}};
+for(const s of Object.values(DEMO)){s.时间='2026-11-13 09:30';s.进行中=[{名称:'首页互动榜',阶段:'开发',链接:'#',谁:'AI'},{名称:'直播礼物连击',阶段:'出方案',链接:'#',谁:'AI'}];s.其他=[]}
+function draw(){
+  document.getElementById('bar').innerHTML=(qs.get('t')?'':KBUI.list.map(x=>`<button data-t="${x.名称}" aria-pressed="${x.名称===tpl}">${x.名称}</button>`).join('')+'<span style="width:12px"></span>')
+    +'阶段 '+STAGES.map(([k,n])=>`<button data-s="${k}" aria-pressed="${k===stage}">${n}</button>`).join('');
+  document.getElementById('desc').textContent=(STAGES.find(x=>x[0]===stage)||[])[2]||'';
+  const v=document.getElementById('view');v.innerHTML=KBUI.render(tpl,DEMO[stage],{demo:true});KBUI.bind(v,DEMO[stage],{demo:true});
+  document.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{stage=b.dataset.s;draw()});
+  document.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{tpl=b.dataset.t;draw()});
+}
+draw();
+addEventListener('message',e=>{if(e.data&&e.data.kbTpl){tpl=e.data.kbTpl;draw()}});
+</script>
+</body>
+</html>
