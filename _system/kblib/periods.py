@@ -237,6 +237,38 @@ def _same(a: Path, b: Path):
     return False
 
 
+PREVIEW_EXT = {'.psd', '.psb', '.tif', '.tiff', '.heic'}      # 网页和 AI 看不了的设计稿格式：放进来时转一张 PNG 预览
+
+
+def design_preview(path):
+    """PSD 等转 PNG 预览（同目录 <原名>.png，macOS 自带 sips，合并图层后的效果图）。转不了返回空。"""
+    p = Path(path)
+    if p.suffix.lower() not in PREVIEW_EXT:
+        return ''
+    out = p.with_name(p.name + '.png')
+    if out.exists() and out.stat().st_mtime >= p.stat().st_mtime:
+        return str(out)
+    import subprocess
+    if shutil.which('sips'):                      # macOS 自带
+        cmd = ['sips', '-s', 'format', 'png', str(p), '--out', str(out)]
+    elif shutil.which('magick') or shutil.which('convert'):     # Linux 服务器：ImageMagick（[0] = 合并后的效果图）
+        cmd = [shutil.which('magick') or shutil.which('convert'), f'{p}[0]', str(out)]
+    else:
+        return ''
+    r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+    return str(out) if r.returncode == 0 and out.exists() else ''
+
+
+def design_previews(d):
+    """这一期设计图里还没预览的 PSD 等补转一遍。返回新生成的。"""
+    out = []
+    for p in (Path(d) / '设计图').rglob('*'):
+        if p.is_file() and p.suffix.lower() in PREVIEW_EXT and HIST not in p.parts and not p.with_name(p.name + '.png').exists():
+            if design_preview(p):
+                out.append(p.name)
+    return out
+
+
 def add_material(period, src, category=None, note='', sub='', reindex=True):
     d = period_dir(period)
     src = Path(src).expanduser().resolve()
@@ -273,6 +305,9 @@ def add_material(period, src, category=None, note='', sub='', reindex=True):
         shutil.copy2(src, dest)
     action = '更新材料' if extra else '新增材料'
     log(d, action, f'{rel}{src.name}{extra}' + (f'（{note}）' if note else ''))
+    pv = design_preview(dest) if dest.is_file() else ''
+    if pv:
+        extra += f'，已生成预览图 {Path(pv).name}'
     stats = _search.index_docs() if reindex else ''
     hint = ''
     if cat == '设计图' and not sub and dest.suffix.lower() in IMG_EXT:

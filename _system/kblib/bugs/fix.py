@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from ..common import KBError, PERIODS, now, uuid_hex
 from ..periods import load_meta, log, period_dir, period_names
-from ..engines import engine_popen, get_engine
+from ..engines import engine_popen, role_engine
 from ..devprep import _git
 from ..devsession import _alive, _dev_env
 from ..devices import dev_activity
@@ -215,7 +215,7 @@ def fix_queue_tick():
 
 
 def _fx_start(root, branch, part, by='修复队列'):
-    eng = get_engine()
+    eng = role_engine('Bug修复')
     rp = Path(root)
     sid = datetime.now().strftime('%Y%m%d-%H%M%S-') + uuid_hex()[:4]
     (ZT_DIR / '分析会话').mkdir(parents=True, exist_ok=True)

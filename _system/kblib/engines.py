@@ -224,14 +224,68 @@ def set_period_engine(period, eid):
 
 
 def period_engine(m):
-    """开发会话用的引擎：会话里记的 > 这一期选的 > 默认。"""
-    for eid in ((m.get('开发会话') or {}).get('引擎'), m.get('AI引擎')):
+    """开发会话用的引擎：会话里记的 > 这一期选的 > 「开发」角色指定的 > 默认。"""
+    for eid in ((m.get('开发会话') or {}).get('引擎'), m.get('AI引擎'), (load_settings().get('角色引擎') or {}).get('开发')):
         if eid:
             try:
                 return get_engine(eid)
             except KBError:
                 pass
     return get_engine()
+
+
+# ---------------------------------------------------------------- 按角色分配 agent：人只下发任务和拍板，每类工作交给指定的 AI
+ROLES = [('方案', '全栈出方案：需求规格、设计对照、影响分析、接口契约'),
+         ('开发', '期的开发会话、各端开发（可以按端单独指定）'),
+         ('审查', '各端代码审查。建议和开发用不同的引擎，审查才独立'),
+         ('Bug分析', 'Bug 只读分析'),
+         ('Bug修复', 'Bug 修复'),
+         ('整理', '模糊添加、来源更新后的资料整理')]
+ROLE_ENDS = ('服务端', 'Web', 'iOS', 'Android', '鸿蒙')
+
+
+def role_engine(role, m=None, end=''):
+    """这类工作用哪个引擎。
+    开发：开发·<端> > 这一期选的 > 开发 > 默认；方案：方案 > 这一期选的 > 默认；审查：审查·<端> > 审查 > 默认（不跟这一期走，保持独立）；其他：角色 > 默认。"""
+    r = load_settings().get('角色引擎') or {}
+    chain = []
+    if end:
+        chain.append(r.get(f'{role}·{end}'))
+    if role == '开发':
+        chain += [(m or {}).get('AI引擎'), r.get('开发')]
+    elif role == '方案':
+        chain += [r.get('方案'), (m or {}).get('AI引擎')]
+    else:
+        chain.append(r.get(role))
+    for eid in chain:
+        if eid:
+            try:
+                return get_engine(eid)
+            except KBError:
+                pass
+    return get_engine()
+
+
+def role_engines():
+    r = load_settings().get('角色引擎') or {}
+    return {'角色': [{'角色': k, '说明': v, '引擎': r.get(k, '')} for k, v in ROLES],
+            '按端': {f'{k}·{e}': r.get(f'{k}·{e}', '') for k in ('开发', '审查') for e in ROLE_ENDS}}
+
+
+def set_role_engine(role, eid):
+    ok = {k for k, _ in ROLES} | {f'{k}·{e}' for k in ('开发', '审查') for e in ROLE_ENDS}
+    if role not in ok:
+        raise KBError(f'没有这个角色：{role}')
+    if eid:
+        get_engine(eid)
+    s = load_settings()
+    r = s.setdefault('角色引擎', {})
+    if eid:
+        r[role] = eid
+    else:
+        r.pop(role, None)
+    save_settings(s)
+    return f'「{role}」改用 {get_engine(eid)["名称"] if eid else "默认（跟随上一级）"}'
 
 
 _CLEAN_ENV = ('CLAUDECODE', 'CLAUDE_CODE_ENTRYPOINT', 'CLAUDE_CODE_SSE_PORT')

@@ -27,6 +27,7 @@ PLUGIN_EVENTS = {'开发开始': '网页点「开始开发 / 继续开发」后�
 PLUGIN_ENV = {'KB_EVENT': '时机（开发开始 / 开发完成）', 'KB_PERIOD': '期名', 'KB_PERIOD_DIR': '这一期的资料目录',
               'KB_REPO': '代码仓库绝对路径', 'KB_BRANCH': '当前分支', 'KB_DOCS': '开发流程的文档目录（可能为空）',
               'KB_PLUGIN_CONFIG': '设置里填的配置项（JSON）', 'KB_ROOT': '知识库根目录', 'KB_PYTHON': '知识库用的 Python',
+              'KB_CLI': '知识库命令行入口 kb.py（用 KB_PYTHON 运行）',
               'KB_PLUGIN_BASE': '「基础信息」类配置项选中的条目（JSON：键 → {字段: 值}，含机密，只在运行时给）'}
 PLUGIN_TOOL = '工具'      # plugin.json「类型」：工具 = 不挂时机，由你 / AI 按需调用（kb_plugin_call、kb plugin call）
 
@@ -150,7 +151,7 @@ def _plugin_base(p, by):
 
 
 def _plugin_env(p, by, **kw):
-    env = dict(os.environ, KB_ROOT=str(ROOT), KB_PYTHON=sys.executable,
+    env = dict(os.environ, KB_ROOT=str(ROOT), KB_PYTHON=sys.executable, KB_CLI=str(Path(__file__).resolve().parents[1] / 'kb.py'),
                KB_PLUGIN_CONFIG=json.dumps(p['配置'], ensure_ascii=False))
     b = _plugin_base(p, by)
     if b:

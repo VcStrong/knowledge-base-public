@@ -1,6 +1,8 @@
 # From 大大王.DT
 """命令行（kb …）。"""
 import argparse
+import json
+import os
 import re
 import sys
 from .common import CATS, INBOX, KBError, ROOT, STATUSES
@@ -29,6 +31,7 @@ from .bugs.analysis import bug_analyze
 from .bugs.fix import bug_fixed
 from .anr.store import anr_add, anr_link, anr_list, anr_mapping, anr_set_version, anr_show
 from .mcp import serve
+from .stats import stats_facts, stats_text
 
 
 def approve(name):
@@ -91,7 +94,7 @@ def main(argv=None):
     x = sp.add_parser('log', help='追加记录')
     x.add_argument('name')
     x.add_argument('note')
-    x = sp.add_parser('login', help='保存某网站的登录凭据到钥匙串：kb login confluence.example.com 用户名')
+    x = sp.add_parser('login', help='保存某网站的登录凭据（Mac 存钥匙串，服务器存加密文件）：kb login confluence.example.com 用户名')
     x.add_argument('host')
     x.add_argument('user')
     x = sp.add_parser('fetch', help='预览网页 / Confluence 页面')
@@ -117,6 +120,9 @@ def main(argv=None):
     x.add_argument('name', nargs='?', default='')
     x.add_argument('event', nargs='?', default='')
     x.add_argument('rest', nargs='*', default=[])
+    x = sp.add_parser('stats', help='工作统计（统计插件算）：kb stats [今天|本周|本月|近7天|近30天|全部]；--facts 输出给插件的原始事实 JSON')
+    x.add_argument('range', nargs='?', default='')
+    x.add_argument('--facts', action='store_true')
     x = sp.add_parser('task', help='新建事项（不是产品需求的工作）：kb task <名称> [说明] [-k 类型] [-f 来源] [-p 高|中|低] [--bug 编号…]')
     x.add_argument('name')
     x.add_argument('summary', nargs='?', default='')
@@ -138,14 +144,39 @@ def main(argv=None):
     x.add_argument('-f', '--source', default='')
     x.add_argument('-n', '--count', type=int, default=1)
     sp.add_parser('serve', help='以 MCP（stdio）方式运行')
-    x = sp.add_parser('web', help='启动本地网页（默认 http://127.0.0.1:11555）')
-    x.add_argument('--port', type=int, default=11555)
+    x = sp.add_parser('web', help='启动网页（默认 http://127.0.0.1:11555 只给本机；部署在远端：kb web --host 0.0.0.0，要先 kb passwd）')
+    x.add_argument('--port', type=int, default=int(os.environ.get('KB_PORT') or 11555))
+    x.add_argument('--host', default='', help='监听地址，默认 127.0.0.1（或环境变量 KB_HOST）')
+    sp.add_parser('passwd', help='设置 / 取消网页访问密码（部署在远端、或网页经反向代理开放时必须设）')
+    x = sp.add_parser('token', help='远处的 Claude Code 连知识库用的访问令牌：kb token add <名称> | list | del <名称>')
+    x.add_argument('op', choices=['add', 'list', 'del'])
+    x.add_argument('name', nargs='?', default='')
     a = ap.parse_args(argv)
     if a.cmd == 'serve':
         return serve()
     if a.cmd == 'web':
         import web
-        return web.main(a.port)
+        return web.main(a.port, a.host)
+    if a.cmd == 'passwd':
+        import getpass
+        from .deploy import set_password
+        p1 = getpass.getpass('新的网页访问密码（至少 8 位；直接回车 = 取消密码）：')
+        if p1 and getpass.getpass('再输一次：') != p1:
+            print('两次不一样，没有改')
+            return 1
+        print(set_password(p1))
+        return 0
+    if a.cmd == 'token':
+        from .deploy import token_add, token_del, token_list
+        if a.op == 'add':
+            t = token_add(a.name)
+            print(f'令牌「{a.name}」（只显示这一次，丢了就删掉重建）：\n{t}\n\n在要连知识库的电脑上：\n'
+                  f'  claude mcp add --transport http kb <网页地址>/mcp --header "Authorization: Bearer {t}"')
+        elif a.op == 'list':
+            print('\n'.join(f'- {x["名称"]}（{x["时间"]} 创建，最近使用 {x["最近使用"] or "无"}）' for x in token_list()) or '还没有令牌')
+        else:
+            print(token_del(a.name))
+        return 0
     try:
         if a.cmd == 'init':
             init()
@@ -177,9 +208,10 @@ def main(argv=None):
         elif a.cmd == 'login':
             host = re.sub(r'^https?://', '', a.host).split('/')[0]
             what = 'Figma 个人访问令牌' if 'figma' in host else f'{a.user}@{host} 的密码'
-            print(f'请输入{what}（由 macOS 钥匙串接收，知识库和 AI 看不到明文）')
+            from .infra import vault
+            print(f'请输入{what}（' + ('由 macOS 钥匙串接收，知识库和 AI 看不到明文' if vault.BACKEND == 'keychain' else '存进加密文件，不回显') + '）')
             _fetch().save_cred(host, a.user)
-            r = f'已保存到钥匙串（服务名 kb:{host}）'
+            r = f'已保存到{vault.LABEL}（服务名 kb:{host}）'
         elif a.cmd == 'fetch':
             r = fetch_url(a.url)
         elif a.cmd == 'verify':
@@ -241,6 +273,8 @@ def main(argv=None):
             else:
                 save_zentao_settings(platform=g(0), source=a.source)
                 r = f'已改平台：{g(0)}'
+        elif a.cmd == 'stats':
+            r = json.dumps(stats_facts(), ensure_ascii=False) if a.facts else stats_text(a.range)
         elif a.cmd == 'plugin':
             if a.action == 'run':
                 if not a.plugin or not a.name:

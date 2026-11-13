@@ -13,7 +13,7 @@ import threading
 from datetime import datetime
 from pathlib import Path
 
-from .common import KBError, now, uuid_hex
+from .common import KBError, now, sess_env, uuid_hex
 from .periods import load_meta, log, period_dir, period_names, save_meta, set_status
 from .notes import add_note, note_title, notes_of
 from .devices import dev_activity
@@ -21,6 +21,8 @@ from .engines import engine_popen, period_engine
 from .devsession import DEV_DIR, _NO_BG, _alive, _dev_env, _dev_spawn, _notify, _session_id, dev_chat, dev_session
 from .bugs.index import zt_load
 from .bugs.analysis import _an_load, _an_save, an_sessions
+from . import lazy
+_stackdev = lazy('kblib.stackdev')      # 上层模块：用到时才 import
 
 DEV_KIND = {'复测': '复测会话', '跟进': '跟进会话'}
 
@@ -50,6 +52,7 @@ def period_sessions(name):
                     '可打断': True})
     for x in _px_list(d):
         out.append({'键': 'px:' + x['编号'], '名称': '新会话：' + x['内容'][:16], '开始': x['开始时间'], '可打断': False})
+    out += _stackdev.sessions_of(d)
     for x in _period_an(d.name):
         if x.get('状态') == '运行中':
             out.append({'键': 'an:' + x['编号'], '名称': _an_name(x), '开始': x.get('开始时间', ''), '可打断': False})
@@ -307,8 +310,8 @@ def talk_queue_tick(only=''):
 
 def take_session_msgs():
     """Bug 分析 / 修复会话认领发给自己的消息（按环境变量 KB_SESSION），附在它调用知识库工具的结果后面。"""
-    key = os.environ.get('KB_SESSION', '')
-    if key.startswith('px:'):
+    key = sess_env('KB_SESSION', '')
+    if key.startswith(('px:', 'end:')):
         return _take_px(key)
     if not key.startswith('an:'):
         return ''
@@ -338,7 +341,7 @@ def take_session_msgs():
 
 def _take_px(key):
     try:
-        d = period_dir(os.environ.get('KB_PERIOD', ''))
+        d = period_dir(sess_env('KB_PERIOD', ''))
     except KBError:
         return ''
     m = load_meta(d)

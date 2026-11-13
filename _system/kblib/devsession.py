@@ -10,7 +10,7 @@ import threading
 import time
 from datetime import datetime
 from pathlib import Path
-from .common import DEV_OK, KBError, ROOT, now
+from .common import DEV_OK, KBError, ROOT, now, sess_env
 from .periods import load_meta, log, period_dir, period_names, save_meta, set_status
 from .flows import flow_done, flow_for, flow_text, get_flow, period_flow
 from .engines import engine_bin, engine_popen, period_engine
@@ -332,7 +332,7 @@ def _pending_chat(m):
 
 def _take_chat(d, m):
     """把排队的消息交给正在运行的后台会话（附在它下一次调用知识库工具的结果后面）。m 由调用方保存。"""
-    if os.environ.get('KB_PERIOD', d.name) != d.name or os.environ.get('KB_SESSION', 'dev') != 'dev':
+    if sess_env('KB_PERIOD', d.name) != d.name or sess_env('KB_SESSION', 'dev') != 'dev':
         return ''        # 同一期的 Bug 修复会话也带着 KB_PERIOD，靠 KB_SESSION 区分
     xs = _pending_chat(m)
     if not xs:

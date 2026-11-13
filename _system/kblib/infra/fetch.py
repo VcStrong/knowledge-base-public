@@ -9,6 +9,7 @@ from html import unescape
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urljoin, urlparse
+from . import vault
 
 UA = 'kb-local/1.0'
 MAX_DOWNLOAD = 100 * 1024 * 1024
@@ -25,28 +26,19 @@ def keychain_service(host):
 
 
 def cred(host):
-    svc = keychain_service(host)
     try:
-        pw = subprocess.run(['security', 'find-generic-password', '-s', svc, '-w'],
-                            capture_output=True, text=True, timeout=10)
-        if pw.returncode != 0:
-            return None
-        info = subprocess.run(['security', 'find-generic-password', '-s', svc],
-                              capture_output=True, text=True, timeout=10).stdout
+        return vault.find(keychain_service(host))
     except Exception:
         return None
-    m = re.search(r'"acct"<blob>="([^"]*)"', info)
-    return (m.group(1) if m else '', pw.stdout.rstrip('\n'))
 
 
 def save_cred(host, user):
-    """交互式：由 security 自己在终端提示输入密码，本程序拿不到明文。"""
-    subprocess.run(['security', 'add-generic-password', '-U', '-a', user, '-s', keychain_service(host),
-                    '-l', f'知识库抓取 {host}', '-w'], check=True)
+    """交互式输入密码：Mac 上由 security 自己提示（本程序拿不到明文），远端服务器存加密文件。"""
+    vault.put_interactive(keychain_service(host), user, f'知识库抓取 {host}')
 
 
 def login_hint(host):
-    return f'需要登录 {host}：请在终端运行  kb login {host} <用户名>  （密码存入钥匙串）'
+    return f'需要登录 {host}：请在终端运行  kb login {host} <用户名>  （密码存入{vault.LABEL}）'
 
 
 # ---------------------------------------------------------------- HTTP

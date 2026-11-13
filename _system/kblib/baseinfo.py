@@ -6,6 +6,7 @@ import re
 import shutil
 import subprocess
 from pathlib import Path
+from .infra import vault
 from .common import BASE, KBError, now
 from .search import index_docs
 
@@ -20,24 +21,25 @@ KC_SERVICE = os.environ.get('KB_KC_SERVICE', 'kb-base')
 MASK = '●●●●●●'
 
 
-def _kc(*args, check=True):
-    r = subprocess.run(['security', *args], capture_output=True, text=True)
-    if check and r.returncode:
-        raise KBError(f'钥匙串操作失败：{(r.stderr or r.stdout).strip()[:200]}')
-    return r
-
-
-def _kc_set(acct, value):
-    _kc('add-generic-password', '-U', '-s', KC_SERVICE, '-a', acct, '-w', value)
+def _kc_set(acct, value):           # 名字沿用「钥匙串」：Mac 上存钥匙串，远端服务器存加密文件（infra/vault.py）
+    try:
+        vault.put(KC_SERVICE, acct, value)
+    except vault.VaultError as e:
+        raise KBError(str(e))
 
 
 def _kc_get(acct):
-    r = _kc('find-generic-password', '-s', KC_SERVICE, '-a', acct, '-w', check=False)
-    return r.stdout.rstrip('\n') if r.returncode == 0 else None
+    try:
+        return vault.get(KC_SERVICE, acct)
+    except vault.VaultError as e:
+        raise KBError(str(e))
 
 
 def _kc_del(acct):
-    _kc('delete-generic-password', '-s', KC_SERVICE, '-a', acct, check=False)
+    try:
+        vault.delete(KC_SERVICE, acct)
+    except vault.VaultError as e:
+        raise KBError(str(e))
 
 
 def _base_log(action, content):
@@ -53,7 +55,7 @@ def base_load():
 
 
 def _field_md(fd):
-    return f'{fd["名"]}：{MASK}（钥匙串）' if fd.get('机密') else f'{fd["名"]}：{fd.get("值", "")}'
+    return f'{fd["名"]}：{MASK}（{vault.LABEL}）' if fd.get('机密') else f'{fd["名"]}：{fd.get("值", "")}'
 
 
 def base_entry_md(e, head='##'):

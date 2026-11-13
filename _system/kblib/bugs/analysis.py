@@ -10,8 +10,9 @@ from ..common import KBError, KBNeed, load_settings, now, read_text, save_settin
 from ..periods import load_meta, log, period_dir
 from ..repos import load_repos
 from ..search import index_docs
-from ..engines import engine_popen, get_engine
+from ..engines import engine_popen, role_engine
 from ..devprep import _git, _git_root, repo_candidates, want_branches
+from ..hosts import is_remote
 from ..devsession import _alive, _dev_result, _notify
 from ..bugs.sources import bug_sources
 from ..bugs.index import ZT_DIR, _zt_recheck, zt_load, zt_save
@@ -79,6 +80,17 @@ def _fx_heal():
         zt_save(data)
 
 
+END_WORDS = {'iOS': ('ios', 'iphone', 'ipad', '苹果'), 'Android': ('android', '安卓'), '鸿蒙': ('鸿蒙', 'harmony', 'openharmony'),
+             'Web': ('web', 'h5', '网页', '前端', 'pc端', '小程序'), '服务端': ('服务端', '后台', '后端', '接口', 'server', '服务器')}
+
+
+def bug_end(e, ends):
+    """Bug 是哪个端的：标题、简介、产品、模块里只提到一个端时认它。"""
+    t = ' '.join(str(e.get(k) or '') for k in ('标题', '简介', '产品', '模块')).lower()
+    hit = [k for k in ends if any(w in t for w in END_WORDS.get(k, ()))]
+    return hit[0] if len(hit) == 1 else ''
+
+
 def _bug_repo(e):
     """分析用哪个仓库、哪个分支：归属的期 / 事项确认过的开发仓库 > 关联仓库 > 文字资料里的路径 > 同产品以前用过的仓库。"""
     o = e.get('归属') or {}
@@ -90,6 +102,11 @@ def _bug_repo(e):
             d = None
         if d:
             m = load_meta(d)
+            ends = {k: v for k, v in (m.get('各端') or {}).items() if v.get('仓库') and not is_remote(v['仓库'])}
+            if len(ends) > 1:                       # 全栈的期：按 Bug 文字认是哪个端，用那个端的仓库和分支
+                end = bug_end(e, ends)
+                if end:
+                    return ends[end]['仓库'], ends[end].get('分支', ''), f'{o["类型"]}「{o["名称"]}」的{end}仓库（按 Bug 内容认出是{end}）'
             wb = want_branches(d, m)
             branch = wb[0] if wb else ''
             cands = repo_candidates(d, m)
@@ -182,7 +199,7 @@ def bug_analyze(ids, by='用户（网页）'):
                       '候选': sorted({str(v) for v in (load_settings().get('Bug仓库') or {}).values()}
                                      | {v['路径'] for v in load_repos().values()})})
     out = []
-    eng = get_engine()
+    eng = role_engine('Bug分析')
     for root, items in groups.items():
         for i in range(0, len(items), AN_MAX_BUGS):
             if len(running) >= AN_MAX_RUN:

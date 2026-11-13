@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # From 大大王.DT
-"""知识库本地网页：资料浏览、进度看板、检索、拖拽上传。只监听 127.0.0.1。
+"""知识库网页：资料浏览、进度看板、检索、拖拽上传。默认只听 127.0.0.1（本机）；部署在远端时 kb web --host 0.0.0.0，要先 kb passwd 设访问密码（见 kblib/deploy.py）。
 
 「开始开发」= 本人批准 + 后台启动开发会话（需输入期名确认，且只接受本页面发起的请求）；
 没有单独的「批准开发」接口。
@@ -17,6 +17,7 @@ import sys
 import threading
 import time
 import uuid
+from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
@@ -170,7 +171,7 @@ def api_overview():
             'phones': None if ph is None else {'total': len(ph), 'free': sum(1 for x in ph if x['空闲'])}, 'repos': repos, 'inbox': inbox, 'docs': docs,
             'statuses': kb.STATUSES, 'cats': kb.CATS, 'autoRefresh': AUTO, 'zentao': zentao,
             'taskKinds': kb.TASK_KINDS, 'taskPri': kb.TASK_PRI, 'anr': _anr_counts(),
-            'entries': kb.plugin_entries()}
+            'entries': kb.plugin_entries(), 'auth': kb.auth_required()}
 
 
 def _anr_counts():
@@ -223,6 +224,10 @@ def dev_tick():
             kb.talk_queue_tick()         # 期页面排队的内容：这一期会话都结束后开始处理
         except Exception as e:
             print('talk_queue_tick:', repr(e), flush=True)
+        try:
+            kb.stack_tick()              # 全栈各端：收尾、按名额启动排队的端和审查
+        except Exception as e:
+            print('stack_tick:', repr(e), flush=True)
 
 
 def _period_stamp(d, m):
@@ -397,21 +402,70 @@ class H(BaseHTTPRequestHandler):
         origin = self.headers.get('Origin', '')
         return bool(origin) and origin.endswith('//' + self.headers.get('Host', ''))
 
+    def _mcp(self, n):
+        auth = self.headers.get('Authorization', '')
+        tok = auth[7:] if auth.startswith('Bearer ') else ''
+        sess = kb.remote_session(tok) if tok else None
+        if not sess and kb.check_token(tok):
+            sess = {}                                   # kb token 生成的令牌：普通用户身份，不属于某个后台会话
+        if sess is None:
+            return self._send(401, {'error': '令牌无效：远处的 Claude Code 用 kb token add 生成的令牌；'
+                                             '各端远程会话的令牌在网页服务重启后失效，到期页面重新开工这个端'})
+        try:
+            msg = json.loads(self.rfile.read(n) or b'{}')
+        except ValueError:
+            return self._send(400, {'error': 'bad json'})
+        from kblib import mcp as _m
+        from kblib.common import with_sess_env
+        env = {'KB_PERIOD': sess['KB_PERIOD'], 'KB_SESSION': sess['KB_SESSION']} if sess else {'KB_SESSION': '', 'KB_PERIOD': ''}
+        if isinstance(msg, list):
+            out = [r for r in (with_sess_env(env, _m.handle, x) for x in msg) if r is not None]
+        else:
+            out = with_sess_env(env, _m.handle, msg)
+        if out is None or out == []:
+            self.send_response(202)
+            self.send_header('Content-Length', '0')
+            self.end_headers()
+            return
+        return self._send(200, out)
+
     def _local_only(self):
         # 防止其他网页跨站调用写接口
         origin = self.headers.get('Origin', '')
         host = self.headers.get('Host', '')
         return not origin or origin.endswith('//' + host)
 
+    def _cookie(self):
+        c = SimpleCookie(self.headers.get('Cookie', ''))
+        return c['kb_s'].value if 'kb_s' in c else ''
+
+    def _authed(self):
+        return not kb.auth_required() or kb.check_session(self._cookie())
+
+    def _https(self):
+        return self.headers.get('X-Forwarded-Proto', '') == 'https'
+
     def do_GET(self):
         u = urlparse(self.path)
         q = {k: v[0] for k, v in parse_qs(u.query).items()}
+        if u.path == '/login':
+            return self._send(200, LOGIN_PAGE, 'text/html; charset=utf-8')
+        if not self._authed():
+            if u.path == '/':
+                self.send_response(302)
+                self.send_header('Location', '/login')
+                self.send_header('Content-Length', '0')
+                self.end_headers()
+                return
+            return self._send(401, {'error': '要先登录', 'login': True})
         if u.path == '/':
             return self._send(200, PAGE.read_bytes(), 'text/html; charset=utf-8')
         if u.path == '/api/events':
             return self._events()
         if u.path == '/api/overview':
             return self._guard(api_overview)
+        if u.path == '/api/stats':
+            return self._guard(lambda: kb.work_stats(q.get('range', '')))
         if u.path == '/api/period':
             return self._guard(lambda: api_period(q.get('name', '')))
         if u.path == '/api/docs':
@@ -426,6 +480,7 @@ class H(BaseHTTPRequestHandler):
             return self._guard(lambda: {'flows': kb.flows(), 'fields': kb.FLOW_FIELDS, 'vars': kb.FLOW_VARS,
                                         'engines': [dict(e, 状态=kb.engine_status(e), 接入说明=kb.engine_link_help(e))
                                                     for e in kb.engines()],
+                                        'roles': kb.role_engines(),
                                         'engineFields': kb.ENGINE_FIELDS, 'engineVars': kb.ENGINE_VARS,
                                         'plugins': kb.plugins(), 'pluginEvents': kb.PLUGIN_EVENTS,
                                         'pluginEnv': kb.PLUGIN_ENV, 'pluginDir': str(kb.PLUGIN_DIR),
@@ -435,6 +490,10 @@ class H(BaseHTTPRequestHandler):
             return self._guard(lambda: kb.bug_analysis_view(q.get('id', '')))
         if u.path == '/api/zentao/sessions':
             return self._guard(lambda: {'items': list(reversed(kb.an_sessions()))[:20]})
+        if u.path == '/api/stack':
+            return self._guard(lambda: kb.stack_get(q.get('name', '')))
+        if u.path == '/api/stack/repos':
+            return self._guard(lambda: {'items': kb.stack_repos(), 'ends': list(kb.ENDS)})
         if u.path == '/api/plugin/targets':
             return self._guard(kb.plugin_targets)
         if u.path == '/api/plugin/job':
@@ -484,6 +543,32 @@ class H(BaseHTTPRequestHandler):
             return self._send(403, {'error': 'forbidden'})
         u = urlparse(self.path)
         n = int(self.headers.get('Content-Length') or 0)
+        if u.path == '/mcp':           # 远程机器上的会话（开工时发的令牌）、远处的 Claude Code（kb token 生成的令牌）
+            return self._mcp(n)
+        if u.path == '/api/login':
+            try:
+                pw = (json.loads(self.rfile.read(n) or b'{}') or {}).get('password', '')
+                t = kb.web_login(pw)
+            except (ValueError, kb.KBError) as e:
+                return self._send(403, {'error': str(e) if isinstance(e, kb.KBError) else 'bad json'})
+            body = json.dumps({'msg': '已登录'}).encode()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json; charset=utf-8')
+            self.send_header('Set-Cookie', f'kb_s={t}; Path=/; HttpOnly; SameSite=Strict; Max-Age={kb.SESS_DAYS * 86400}'
+                             + ('; Secure' if self._https() else ''))
+            self.send_header('Content-Length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        if u.path == '/api/logout':
+            kb.web_logout(self._cookie())
+            self.send_response(200)
+            self.send_header('Set-Cookie', 'kb_s=; Path=/; Max-Age=0')
+            self.send_header('Content-Length', '0')
+            self.end_headers()
+            return
+        if not self._authed():
+            return self._send(401, {'error': '要先登录', 'login': True})
         if u.path == '/api/upload':
             period = unquote(self.headers.get('X-Period', ''))
             cat = unquote(self.headers.get('X-Category', '')) or None
@@ -548,9 +633,9 @@ class H(BaseHTTPRequestHandler):
         if u.path in ('/api/dev/start', '/api/dev/stop', '/api/dnd', '/api/answer', '/api/base/save',
                       '/api/base/secret', '/api/refresh/claude', '/api/add', '/api/settings/flow',
                       '/api/settings/flow/delete', '/api/settings/default', '/api/period/flow', '/api/settings/flow/draft',
-                      '/api/engine', '/api/engine/delete', '/api/engine/default', '/api/engine/link', '/api/engine/test',
+                      '/api/engine', '/api/engine/role', '/api/engine/delete', '/api/engine/default', '/api/engine/link', '/api/engine/test',
                       '/api/period/engine', '/api/retest', '/api/retest/plan', '/api/issue', '/api/device', '/api/dev/chat',
-                      '/api/plugin', '/api/plugin/dir', '/api/plugin/remove', '/api/plugin/run', '/api/plugin/run2', '/api/plugin/task', '/api/task/push', '/api/task/item', '/api/task/nav', '/api/anr/batch', '/api/period/delete', '/api/period/say',
+                      '/api/plugin', '/api/plugin/dir', '/api/plugin/remove', '/api/plugin/run', '/api/plugin/run2', '/api/plugin/task', '/api/task/push', '/api/task/item', '/api/task/nav', '/api/anr/batch', '/api/stack/end', '/api/stack/plan', '/api/stack/approve', '/api/stack/dev', '/api/stack/stop', '/api/stack/change', '/api/stack/reject', '/api/stack/accept', '/api/period/delete', '/api/period/say',
                       '/api/zentao/settings', '/api/bug/source', '/api/bug/test', '/api/zentao/analyze', '/api/zentao/review', '/api/zentao/fix',
                       '/api/zentao/fixed', '/api/zentao/unfix', '/api/anr/create', '/api/anr/mapping-url', '/api/period/builds', '/api/build/mapping', '/api/anr/automap') and not self._from_page():
             return self._send(403, {'error': '只能在知识库网页上由本人操作'})
@@ -570,6 +655,22 @@ class H(BaseHTTPRequestHandler):
         if u.path == '/api/plugin/task':
             return self._guard(lambda: kb.plugin_to_task(body.get('id', ''), body.get('item', ''), body.get('task', ''),
                                                          body.get('name', ''), body.get('title', ''), body.get('url', '')))
+        if u.path == '/api/stack/end':
+            return self._guard(lambda: {'msg': kb.stack_set_end(body.get('period', ''), body.get('end', ''), body.get('repo', ''), body.get('branch', ''))})
+        if u.path == '/api/stack/plan':
+            return self._guard(lambda: {'msg': kb.stack_plan_start(body.get('period', ''), body.get('note', ''))})
+        if u.path == '/api/stack/change':
+            return self._guard(lambda: {'msg': kb.stack_change_add(body.get('period', ''), body.get('title', ''), body.get('detail', ''), body.get('ends') or [])})
+        if u.path == '/api/stack/reject':
+            return self._guard(lambda: {'msg': kb.stack_change_reject(body.get('period', ''), body.get('id', ''))})
+        if u.path == '/api/stack/accept':
+            return self._guard(lambda: {'msg': kb.stack_accept(body.get('period', ''))})
+        if u.path == '/api/stack/dev':
+            return self._guard(lambda: {'msg': kb.stack_dev_start(body.get('period', ''), body.get('end', ''))})
+        if u.path == '/api/stack/stop':
+            return self._guard(lambda: {'msg': kb.stack_dev_stop(body.get('period', ''), body.get('end', ''))})
+        if u.path == '/api/stack/approve':
+            return self._guard(lambda: {'msg': kb.stack_approve(body.get('period', ''))})
         if u.path == '/api/task/nav':
             return self._guard(lambda: {'msg': kb.task_nav(body.get('period', ''), bool(body.get('show')))})
         if u.path == '/api/anr/batch':
@@ -676,6 +777,8 @@ class H(BaseHTTPRequestHandler):
                                                                  body.get('event') or '开发开始')})
         if u.path == '/api/settings/flow':
             return self._guard(lambda: dict(zip(('msg', 'id'), kb.save_flow(body.get('flow') or {}))))
+        if u.path == '/api/engine/role':
+            return self._guard(lambda: {'msg': kb.set_role_engine(body.get('role', ''), body.get('engine', ''))})
         if u.path == '/api/engine':
             return self._guard(lambda: dict(zip(('msg', 'id'), kb.save_engine(body.get('engine') or {}))))
         if u.path == '/api/engine/delete':
@@ -772,10 +875,33 @@ class H(BaseHTTPRequestHandler):
         self._send(404, {'error': 'not found'})
 
 
-def main(port=11555):
+LOGIN_PAGE = '''<!doctype html><html lang="zh"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>知识库登录</title><style>
+:root{--bg:#f3f5f9;--fg:#1c2433;--card:#fff;--line:#e3e7ef;--acc:#3b5bdb;--mut:#667085}
+@media (prefers-color-scheme:dark){:root{--bg:#0f141d;--fg:#e6eaf2;--card:#171e2a;--line:#283245;--acc:#7c97ff;--mut:#98a2b3}}
+body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--fg);font:15px/1.5 -apple-system,"PingFang SC",system-ui,sans-serif}
+form{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:28px;width:min(340px,calc(100vw - 32px));box-sizing:border-box}
+h1{font-size:18px;margin:0 0 16px}input,button{width:100%;box-sizing:border-box;font:inherit;padding:10px 12px;border-radius:8px}
+input{border:1px solid var(--line);background:var(--bg);color:var(--fg);margin-bottom:12px}button{border:0;background:var(--acc);color:#fff;cursor:pointer}
+p{color:#c92a2a;min-height:1.5em;margin:8px 0 0;font-size:13px}</style></head><body>
+<form id="f"><h1>本地知识库</h1><input type="password" id="p" placeholder="访问密码" autofocus autocomplete="current-password"><button>登录</button><p id="e"></p></form>
+<script>document.getElementById('f').onsubmit=async e=>{e.preventDefault();const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},
+body:JSON.stringify({password:document.getElementById('p').value})});if(r.ok)location.href='/';else document.getElementById('e').textContent=(await r.json()).error||'登录失败'}</script>
+</body></html>'''
+
+
+def main(port=11555, host=''):
     kb.init()
-    srv = ThreadingHTTPServer(('127.0.0.1', port), H)
-    print(f'知识库网页：http://127.0.0.1:{port}', flush=True)
+    host = host or os.environ.get('KB_HOST') or '127.0.0.1'
+    try:
+        kb.check_bind(host)
+    except kb.KBError as e:
+        print(f'没有启动：{e}', flush=True)
+        sys.exit(2)
+    os.environ['KB_WEB_PORT'] = str(port)        # 各端远程会话的 ssh 反向通道连这个端口
+    kb.stackdev_port(port)
+    srv = ThreadingHTTPServer((host, port), H)
+    print(f'知识库网页：http://{host}:{port}' + ('（已开启访问密码）' if kb.auth_required() else ''), flush=True)
     kb.dev_reattach()
     threading.Thread(target=watcher, daemon=True).start()
     threading.Thread(target=dev_tick, daemon=True).start()

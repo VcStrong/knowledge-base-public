@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 from .common import DEV_OK, KBError, PROTO_DIR, ROOT, now, read_text
 from .periods import load_meta, log, period_dir, period_names, save_meta
 from .flows import flow_text
-from .engines import engine_popen, get_engine
+from .engines import engine_popen, role_engine
 from .devsession import DEV_DIR, _alive, _dev_result, _notify, _take_chat, session_flow
 from .urlimport import SRC_DIR, _fetch, _save_snapshot, import_design, import_url
 
@@ -287,7 +287,7 @@ def claude_update(period):
     sids = [x['编号'] for x in load_meta(d).get('来源') or [] if x.get('待更新')]
     if not sids:
         raise KBError('没有待更新的来源条目')
-    eng = get_engine()
+    eng = role_engine('整理')
     (d / DEV_DIR).mkdir(exist_ok=True)
     logf = d / DEV_DIR / f'更新来源-{datetime.now():%Y%m%d-%H%M%S}.jsonl'
     proc = engine_popen(eng, _update_prompt(d.name, sids), f'kb·更新·{d.name}', logf, ROOT)

@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from .common import KBError, ROOT, SYS, now, read_text
 from .periods import period_dir
-from .engines import engine_popen, get_engine
+from .engines import engine_popen, role_engine
 from .devsession import _alive, _dev_result, _notify
 from .devices import dev_activity
 
@@ -86,7 +86,7 @@ def claude_add(text, period=''):
         raise KBError('请粘贴要添加的内容')
     if period:
         period = period_dir(period).name
-    eng = get_engine()
+    eng = role_engine('整理')
     ADD_DIR.mkdir(exist_ok=True)
     aid = f'A{datetime.now():%Y%m%d%H%M%S}{uuid.uuid4().hex[:4]}'
     logf = ADD_DIR / f'{aid}.jsonl'

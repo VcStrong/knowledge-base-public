@@ -42,6 +42,10 @@ _MODULES = [
     'builds',
     'memo',
     'pluginrun',
+    'stack',
+    'stackdev',
+    'stats',
+    'deploy',
     'mcp',
     'cli',
 ]

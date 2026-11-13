@@ -207,6 +207,19 @@ button.danger{border-color:var(--warn);color:var(--warn)}
 .kpi{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--c);border-radius:10px;padding:12px 16px;box-shadow:var(--shadow);display:flex;justify-content:space-between;align-items:center;gap:8px;color:var(--fg)}
 .kpi .k{font-size:12px;letter-spacing:.04em;color:var(--c);font-weight:700}
 .kpi .v{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.3}
+.wstat{margin-bottom:18px}.wstat .sh{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:10px}.wstat .sh h2{margin:0}
+.wstat .sh .fchip{padding:2px 10px;font-size:12px}.wstat .sh .src{margin-left:auto}
+.scards{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}
+.scard{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 14px;box-shadow:var(--shadow);color:var(--fg);min-width:0}
+.scard .k{font-size:12px;color:var(--mut);font-weight:600}.scard .v{font-size:26px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.25}
+.scard .v small{font-size:12px;font-weight:400;color:var(--mut);margin-left:3px}.scard .s{font-size:12px;color:var(--mut);margin-top:2px}
+a.scard:hover{border-color:var(--acc)}
+.sprog{margin-top:12px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:4px 14px}
+.sprow{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(120px,1fr) minmax(0,1.6fr);gap:12px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}
+.sprow:first-child{border-top:0}.sprow .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sbar{display:flex;align-items:center;gap:8px;font-size:12px;font-variant-numeric:tabular-nums}.sbar .b{flex:1;height:6px;background:var(--soft);border-radius:3px;overflow:hidden}
+.sbar .b i{display:block;height:100%;background:var(--acc);border-radius:3px}
+@media (max-width:760px){.sprow{grid-template-columns:minmax(0,1fr)}}
 .fchips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
 .fchip{border-radius:999px;padding:4px 13px;font-size:13px;color:var(--mut)}
 .fchip b{font-weight:500;margin-left:5px;opacity:.8}
@@ -280,7 +293,7 @@ button.danger{border-color:var(--warn);color:var(--warn)}
   <div class="navh">系统</div>
   <a class="nav" data-nav="/settings" href="#/settings"><span class="t">⚙ 设置</span></a>
   <a class="nav" data-nav="/d/" href="#/d/" title="使用说明"><span class="t">? 帮助</span></a>
-  <div class="foot"><span id="live" class="live" title="实时连接中…"></span><span>实时连接 · 127.0.0.1</span></div>
+  <div class="foot"><span id="live" class="live" title="实时连接中…"></span><span>实时连接 · <span id="hostName"></span></span><a id="logout" hidden style="margin-left:auto;color:inherit">退出</a></div>
 </aside>
 <div class="mainc">
 <header class="topbar">
@@ -300,12 +313,13 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const enc=encodeURIComponent;
 const ORDER=['收集中','已批准开发','开发中','已完成','已暂停'];
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),3500)}
-async function api(u,opt){const r=await fetch(u,opt);const j=await r.json();if(!r.ok){const e=new Error(j.error||r.status);e.need=j.need;throw e}return j}
+async function api(u,opt){const r=await fetch(u,opt);const j=await r.json();if(r.status===401&&j.login){location.href='/login';throw new Error('要先登录')}if(!r.ok){const e=new Error(j.error||r.status);e.need=j.need;throw e}return j}
 const post=(u,b)=>api(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
 const badge=s=>`<span class="badge st-${esc(s)}">${esc(s)}</span>`;
 const fileUrl=p=>'/file?path='+enc(p);
 
 let entries=[],ovPeriods=[];
+let ovStats=null,ovRange='';try{ovRange=localStorage.getItem('kb.statRange')||''}catch(_){}
 let ovFilter='全部';try{ovFilter=localStorage.getItem('kb.ovFilter')||'全部'}catch(_){}
 const DOT={收集中:'var(--s0)',已批准开发:'var(--info)',开发中:'var(--s2)',已完成:'var(--s3)',已暂停:'var(--s1)'};
 // 左侧导航：期列表（状态色点 + 待确认 / 问题数）、手机空闲数、当前页高亮
@@ -323,7 +337,8 @@ let navFold={};try{navFold=JSON.parse(localStorage.getItem('kb.navFold')||'{}')}
 })();
 function navAlerts(){document.querySelectorAll('.side .navh').forEach(h=>{const b=h.nextElementSibling;h.classList.toggle('alert',!!(b&&b.querySelector('.n.w:not(:empty),.n.q:not(:empty)')))})}
 function sideNav(d){
-  if(d){periodNames=d.periods.filter(p=>p.kind!=='事项').map(p=>p.name);taskNames=d.periods.filter(p=>p.kind==='事项').map(p=>p.name);
+  $('#hostName').textContent=location.hostname;
+  if(d){const lo=$('#logout');lo.hidden=!d.auth;lo.onclick=async()=>{await fetch('/api/logout',{method:'POST'});location.href='/login'};periodNames=d.periods.filter(p=>p.kind!=='事项').map(p=>p.name);taskNames=d.periods.filter(p=>p.kind==='事项').map(p=>p.name);
     const navItem=p=>`<a class="nav" data-nav="/p/${esc(p.name)}" href="#/p/${enc(p.name)}" title="${esc(p.name)} · ${esc(p.status)}"><span class="d" style="background:${DOT[p.status]||'var(--s0)'}"></span><span class="t">${esc(p.name)}</span><span class="x" data-navx="${esc(p.name)}" title="从侧栏移除（在总览里可以加回）">✕</span>${p.pendingQ?`<span class="n q">${p.pendingQ}</span>`:''}${p.issues?`<span class="n w">${p.issues}</span>`:''}${p.openBugs?`<span class="n b" title="${p.openBugs} 个 Bug 没解决">🐞${p.openBugs}</span>`:''}</a>`;
     const pv=d.periods.filter(p=>p.kind!=='事项'&&!p.navHidden),ph=d.periods.filter(p=>p.kind!=='事项'&&p.navHidden).length;
     $('#navPs').innerHTML=pv.map(navItem).join('')+(ph?`<a class="nav" href="#/" title="在总览的期卡片上点「加到侧栏」"><span class="t mut small">已移出 ${ph} 期，在总览加回</span></a>`:'');
@@ -379,6 +394,7 @@ async function overview(){
     <div class="kpi" style="--c:var(--s4)"><div><div class="k">需要你处理的问题</div><div class="v">${sum('issues')}</div></div><span class="mut small">手机、账号、环境等</span></div>
     <a class="kpi" href="#/phones" style="--c:var(--s3)"><div><div class="k">空闲手机</div><div class="v">${ph?ph.free+' / '+ph.total:'—'}</div></div><span class="mut small">${ph?'多个期共用':'本机找不到 adb'}</span></a>
   </section>
+  <section class="wstat" id="ovStats">${statsHtml(ovStats)}</section>
   <div class="fchips">${['全部',...ORDER].map(s=>`<button class="fchip ${s===ovFilter?'on':''}" data-f="${s}">${s}<b>${cnt(s)}</b></button>`).join('')}</div>
   <section class="pgrid">${list.map(card).join('')||'<p class="mut">这个状态下还没有期。</p>'}</section>
   <div class="row" style="justify-content:space-between;margin-top:22px"><h2 style="margin:0">事项 <span class="mut small" style="font-weight:400">不是产品需求、但要推动的工作：用户上报的 ANR、加埋点、线上问题、优化、调研、其他</span></h2><button id="ovTask">＋ 新建事项</button></div>
@@ -391,11 +407,29 @@ async function overview(){
   ${d.repos.length?`<div class="tw"><table><tr><th>名称</th><th>路径</th><th>已索引文件</th><th>登记时间</th></tr>${d.repos.map(r=>`<tr><td>${esc(r.name)}</td><td class="small mono">${esc(r.path)}</td><td>${r.files}</td><td class="small">${esc(r.added)}</td></tr>`).join('')}</table></div>`:'<p class="mut">还没有登记。终端运行 <code>kb repo &lt;代码路径&gt;</code>，或让 Claude 登记。</p>'}
   <p class="mut small">知识库目录：${esc(d.root)}　·　<a href="#/d/使用说明">使用说明</a></p>`;
   app.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{ovFilter=b.dataset.f;try{localStorage.setItem('kb.ovFilter',ovFilter)}catch(_){}overview()});
+  loadStats();
   if($('#ovAdd'))$('#ovAdd').onclick=()=>addDlg();
   $('#ovTask').onclick=()=>addDlg('task');
   app.querySelectorAll('[data-tnav]').forEach(a=>a.onclick=()=>taskNav(a.dataset.tnav,!!a.dataset.show));
   app.querySelectorAll('[data-pnav]').forEach(a=>a.onclick=e=>{e.preventDefault();e.stopPropagation();taskNav(a.dataset.pnav,!!a.dataset.show)});
   const g=$('#ibGo');if(g)g.onclick=async()=>{try{const r=await post('/api/inbox',{period:$('#ibP').value});toast(r.msg);render()}catch(e){toast(e.message)}};
+}
+
+// 工作统计：数由「统计」插件算（⚙ 设置 → 插件 挂载「工作统计」）；没挂就不显示
+function statsHtml(r){
+  if(!r)return '';
+  if(r['错误'])return `<div class="sh"><h2>工作统计</h2><span class="mut small">${esc(r['错误'])}</span></div>`;
+  const pr=r['进度']||[];
+  return `<div class="sh"><h2>工作统计</h2>${(r['范围列表']||[]).map(x=>`<button class="fchip ${x===r['范围']?'on':''}" data-sr="${esc(x)}">${esc(x)}</button>`).join('')}
+    <span class="mut small src">插件「${esc(r['插件'])}」计算${r['起']?` · ${esc(r['起'])} 起`:''}</span></div>
+  <div class="scards">${(r['卡片']||[]).map(c=>{const t=c['链接']?'a':'div';return `<${t} class="scard"${c['链接']?` href="${esc(c['链接'])}"`:''}><div class="k">${esc(c['标题'])}</div><div class="v">${esc(c['值'])}<small>${esc(c['单位']||'')}</small></div>${c['说明']?`<div class="s">${esc(c['说明'])}</div>`:''}</${t}>`}).join('')}</div>
+  ${pr.length?`<div class="sprog">${pr.map(x=>{const pc=x['总数']?Math.round(100*x['完成']/x['总数']):0;return `<div class="sprow"><div class="nm">${badge(x['状态'])} <a href="${esc(x['链接']||'#/')}" title="${esc(x['名称'])}">${esc(x['名称'])}</a></div>
+    <div class="sbar">${x['总数']?`<span class="b"><i style="width:${pc}%"></i></span><span>${x['完成']}/${x['总数']}</span>`:'<span class="mut">—</span>'}</div><div class="small mut">${esc(x['说明']||'')}</div></div>`}).join('')}</div>`:''}`;
+}
+async function loadStats(){
+  try{ovStats=await api('/api/stats'+(ovRange?'?range='+enc(ovRange):''))}catch(e){ovStats=null}
+  const el=$('#ovStats');if(!el)return;el.innerHTML=statsHtml(ovStats);
+  el.querySelectorAll('[data-sr]').forEach(b=>b.onclick=()=>{ovRange=b.dataset.sr;try{localStorage.setItem('kb.statRange',ovRange)}catch(_){}loadStats()});
 }
 
 // 手机：所有期共用，谁在用、哪个分支
@@ -609,7 +643,7 @@ function srcDlg(s,ents,c){
       <select id="sEnt"><option value="">自动找（名称里带平台名的那条）</option>${ents.map(e=>`<option value="${esc(e['编号'])}" ${c&&c['账号条目']===e['编号']?'selected':''}>${esc(e['编号']+' '+e['名称'])}</option>`).join('')}</select></label>
     <div id="sOpts">${optsHtml(ad)}</div>
     ${c?`<label class="row" style="gap:6px;display:flex;align-items:center"><input type="checkbox" id="sOn" style="width:auto;margin:0" ${c['启用']?'checked':''}> 启用（停用后不再同步，已有索引保留）</label>`:''}
-    <p class="mut small">只读：知识库只从平台拉数据，从不回写。密码 / 令牌存在基础信息的机密字段里（钥匙串）。</p>
+    <p class="mut small">只读：知识库只从平台拉数据，从不回写。密码 / 令牌存在基础信息的机密字段里（Mac 上是钥匙串，服务器上是加密文件）。</p>
     <div class="row" style="gap:8px"><button class="pri" id="sSave">${isNew?'接入并同步':'保存'}</button>${c?'<button id="sTest">测试连接</button><button id="sDel" style="margin-left:auto">移除这个平台</button>':''}</div>
     <pre id="sOut" class="small" style="margin-top:8px"></pre></div>`;
   openDlg(isNew?'接入 Bug / 崩溃平台':`平台：${c.ID}`,body());
@@ -840,12 +874,14 @@ async function period(name){
   };
   const tabs=[['dev','开发',(m['待确认']||[]).filter(q=>q['状态']==='待回答').length+((m['非阻断问题']||[]).filter(q=>q['状态']==='待处理').length)],
     ['mat','资料',d.cats.reduce((a,c)=>a+d.materials[c].length+d.notes[c].length,0)],
+    ['stack','全栈',m['全栈']&&m['全栈']['状态']==='待拍板'?1:0],
     ['build','构建',0],
     ['bug','Bug',(d.bugs||[]).filter(b=>b['状态']!=='已关闭').length],
     ['log','记录',d.log.length]];
   // 整页：开发一直在资料上面；开发完成（已完成）后 Bug 提到最上面；记录一直在最下面
   const devDone=m['状态']==='已完成', openBugs=(d.bugs||[]).filter(b=>b['状态']!=='已关闭');
-  const order=devDone?['bug','dev','build','mat','log']:['dev','build','mat','bug','log'];
+  const stackFirst=!devDone&&!['已批准开发','开发中'].includes(m['状态'])&&(m['全栈']||{})['状态']!=='已拍板';
+  const order=devDone?['bug','dev','stack','build','mat','log']:stackFirst?['stack','dev','build','mat','bug','log']:['dev','stack','build','mat','bug','log'];
   const focus=devDone?(openBugs.length?'bug':''):['已批准开发','开发中'].includes(m['状态'])?'dev':'';
   const whole=pview==='whole';
   const secHd=k=>{if(!whole)return'';const t=tabs.find(x=>x[0]===k);return`<h2 class="psec">${t[1]}${k===focus?'<span class="cur">进行中</span>':''}</h2>`};
@@ -876,6 +912,7 @@ async function period(name){
     <div data-pane="dev" style="order:${order.indexOf('dev')}" ${whole||tab==='dev'?'':'hidden'}>${secHd('dev')}<div class="dev" id="devBox">${devCache.name===d.name?devCache.html:'<span class="mut">开发面板加载中…</span>'}</div></div>
     <div data-pane="mat" style="order:${order.indexOf('mat')}" ${whole||tab==='mat'?'':'hidden'}>${secHd('mat')}${(m['来源']||[]).length?`<details class="cat" id="srcSec" ${pend||(m['来源']||[]).some(x=>x['待更新'])?'open':''}><summary class="hd" style="cursor:pointer"><b>来源核对 <span class="mut">(${(m['来源']||[]).length})</span> <span class="mut small" style="font-weight:400">从网址导入的资料，逐条和原网页核对</span></b>${pend?`<span class="badge st-已暂停">${pend} 待核对</span>`:'<span class="badge st-已完成">全部已核对</span>'}</summary><div class="bd">${srcBox(d)}</div></details>`:''}
       <div class="matgrid">${d.cats.map(catBox).join('')}</div></div>
+    <div data-pane="stack" style="order:${order.indexOf('stack')}" ${whole||tab==='stack'?'':'hidden'}>${secHd('stack')}<div class="card2"><div class="bd" id="stackBox"><span class="mut small">加载中…</span></div></div></div>
     <div data-pane="build" style="order:${order.indexOf('build')}" ${whole||tab==='build'?'':'hidden'}>${secHd('build')}<div class="card2"><div class="bd" id="buildBox"><span class="mut small">构建加载中…</span></div></div></div>
     <div data-pane="bug" style="order:${order.indexOf('bug')}" ${whole||tab==='bug'?'':'hidden'}>${secHd('bug')}<div class="card2"><div class="bd">
       <p class="mut small" style="margin-top:0">Bug 平台上归到这里的 Bug（按执行 / Sprint / Jenkins 分支自动归，也可手动改归属）。知识库只存链接和简介；「分析」由后台 AI 只读完成（实时拉取原文和截图 → 对照本期分支改动和代码），结论等你审核。<a href="#/bugs">全部 Bug →</a></p>
@@ -886,7 +923,7 @@ async function period(name){
   app.querySelectorAll('[data-pv]').forEach(b=>b.onclick=()=>{pview=b.dataset.pv;try{localStorage.setItem('kb.pview',pview)}catch(_){}render()});
   if(!whole)app.querySelectorAll('[data-tab]').forEach(a=>a.onclick=()=>{ptabs[d.name]=a.dataset.tab;try{localStorage.setItem('kb.ptabs',JSON.stringify(ptabs))}catch(_){}
     app.querySelectorAll('[data-tab]').forEach(x=>x.classList.toggle('on',x===a));app.querySelectorAll('[data-pane]').forEach(x=>x.hidden=x.dataset.pane!==a.dataset.tab)});
-  devBox(d.name);talkBind(d.name);buildBox(d.name);
+  devBox(d.name);talkBind(d.name);buildBox(d.name);stackBox(d.name);
   bindBugs(app);
   app.querySelectorAll('[data-read]').forEach(a=>a.onclick=()=>a.dataset.dir?toast('目录：请在 Finder 或让 Claude 查看'):readFile(a.dataset.read));
   app.querySelectorAll('[data-img]').forEach(a=>a.onclick=()=>showImg(a.dataset.img,d));
@@ -1148,6 +1185,99 @@ async function allActs(name){
   let a;try{a=await api('/api/dev/activity?name='+enc(name))}catch(e){return toast(e.message)}
   openDlg('全部开发动作（不自动刷新）',a.length?`<div class="small mut" style="margin-bottom:6px">共 ${a.length} 条，最新的在最下面</div><div class="act" style="max-height:70vh">${a.map(actLine).join('')}</div>`:'<span class="mut">暂无</span>');
   const el=$('#dlgB').querySelector('.act');if(el)el.scrollTop=el.scrollHeight;
+}
+// ---------------- 全栈：各端仓库 → AI 出影响分析和接口契约 → 你拍板（拍板 1）
+let stackRepos=null;
+async function stackBox(name){
+  const box=$('#stackBox');if(!box)return;
+  let v;try{v=await api('/api/stack?name='+enc(name))}catch(e){box.innerHTML=`<span class="mut small">${esc(e.message)}</span>`;return}
+  if(!$('#stackBox')||curPeriod()!==name)return;
+  if(!stackRepos){try{stackRepos=(await api('/api/stack/repos')).items}catch(_){stackRepos=[]}}
+  const st=v['状态'],run=v['会话']&&v['会话']['状态']==='运行中',P=v['方案'],used=new Set(v['各端'].filter(r=>r['仓库']).map(r=>r['仓库']));
+  const opts=r=>{const fit=stackRepos.filter(x=>x['端'].includes(r['端'])),rest=stackRepos.filter(x=>!x['端'].includes(r['端'])&&x['路径']!==r['仓库']);
+    return `<option value="">— 不涉及 —</option>${r['仓库']?`<option value="${esc(r['仓库'])}" selected>${esc(r['显示'])}</option>`:''}
+      ${fit.filter(x=>x['路径']!==r['仓库']).map(x=>`<option value="${esc(x['路径'])}">${esc(x['名称'])}　${esc(x['分支']||'')}</option>`).join('')}
+      ${rest.length?`<optgroup label="其他仓库">${rest.map(x=>`<option value="${esc(x['路径'])}">${esc(x['名称'])}${x['端'].length?' ('+esc(x['端'].join('/'))+')':x['远程']?' (远程)':''}</option>`).join('')}</optgroup>`:''}
+      <option value="__other">填写地址（本机路径或 user@主机:/路径）…</option>`};
+  const need=new Set((v['全栈']||{})['涉及']||[]);
+  const ends=v['各端'].map(r=>`<tr ${need.has(r['端'])&&!r['仓库']?'style="background:var(--s4b)"':''}><td><b>${esc(r['端'])}</b>${need.has(r['端'])&&!r['仓库']?'<div class="small" style="color:var(--s4)">方案要做，选仓库</div>':''}</td>
+    <td><select data-send="${esc(r['端'])}" style="max-width:340px">${opts(r)}</select>${r['远程']?' <span class="badge">远程</span>':''}</td>
+    <td>${r['仓库']?`<input type="text" data-sbr="${esc(r['端'])}" value="${esc(r['分支']||'')}" placeholder="${esc(r['当前分支']?'当前 '+r['当前分支']:'开发分支')}" style="width:220px">`:''}</td>
+    <td class="small mut">${r['仓库']?esc(r['流程']):''}</td></tr>`).join('');
+  const W={小:'st-已完成',中:'st-收集中',大:'st-已暂停2'};
+  const plan=P?`<div style="margin-top:14px"><div><b>方案</b> <span class="mut small">${esc(P['时间']||'')}</span>　${badge(st==='已拍板'?'已拍板':st==='待拍板'?'待拍板':st||'')}${v['全栈']['契约版本']?` <span class="badge st-开发中">契约 ${esc(v['全栈']['契约版本'])}</span>`:''}</div>
+    <p>${esc(P['摘要']||'')}</p>
+    ${(P['需求']||[]).length?`<details ${st==='待拍板'?'open':''} style="margin-bottom:10px"><summary class="small"><b>需求 ${P['需求'].length} 条</b> <span class="mut">验收标准 ${P['需求'].reduce((a,r)=>a+(r['验收']||[]).length,0)} 条${v['规格路径']?' · '+esc(v['规格路径']):''}</span></summary>
+      <div class="tw"><table><tr><th style="width:80px">编号</th><th>需求与验收</th><th style="width:120px">端</th><th style="width:160px">设计</th></tr>
+      ${P['需求'].map(r=>`<tr><td class="mono small">${esc(r['编号'])}</td><td><b>${esc(r['标题']||'')}</b>${r['描述']?`<div class="small mut">${esc(r['描述'])}</div>`:''}
+        ${(r['验收']||[]).length?`<ul class="small" style="margin:4px 0 0;padding-left:16px">${r['验收'].map(a=>`<li>${esc(a)}</li>`).join('')}</ul>`:'<div class="small" style="color:var(--s4)">没有验收标准</div>'}</td>
+        <td class="small">${esc((r['端']||[]).join('、'))}</td><td class="small">${(r['设计']||[]).length?esc(r['设计'].join('、')):'<span style="color:var(--s4)">无</span>'}</td></tr>`).join('')}</table></div></details>`:''}
+    ${(()=>{const dc=P['设计对照']||{},L=(k,t)=>(dc[k]||[]).length?`<div class="small"><b>${t}（${dc[k].length}）</b><ul style="margin:2px 0 6px;padding-left:16px">${dc[k].map(x=>`<li>${esc(typeof x==='string'?x:(x['页面']||'')+' 缺 '+(x['缺']||''))}</li>`).join('')}</ul></div>`:'';
+      const body=L('缺设计','需求有、设计没画')+L('设计多出','设计画了、需求没写')+L('缺状态','缺状态')+L('端不一致','各端不一致')+(dc['无法核对']?`<div class="small" style="color:var(--s4)">无法核对：${esc(dc['无法核对'])}</div>`:'');
+      return P['设计对照']?`<div class="bcard" style="margin-bottom:10px;border-color:${body?'var(--s1)':'var(--line)'}"><b class="small">设计稿对照</b> ${body?'':'<span class="badge st-已完成">需求和设计一致</span>'}<div style="margin-top:4px">${body}</div></div>`:''})()}
+    <div class="bcards">${(P['各端']||[]).map(x=>`<div class="bcard" style="flex:1;min-width:220px;${x['涉及']?'':'opacity:.55'}"><b>${esc(x['端'])}</b> ${x['涉及']?`<span class="badge ${W[x['工作量']]||''}">${esc(x['工作量']||'')}</span>`:'<span class="badge">不涉及</span>'}
+      <div class="small mut">${esc(x['原因']||'')}</div>${(x['改动']||[]).length?`<ul class="small" style="margin:4px 0 0;padding-left:16px">${x['改动'].map(c=>`<li>${esc(c)}</li>`).join('')}</ul>`:''}
+      ${x['风险']?`<div class="small" style="color:var(--s4);margin-top:4px">风险：${esc(x['风险'])}</div>`:''}</div>`).join('')}</div>
+    ${(P['接口']||[]).length?`<div style="margin-top:10px"><b class="small">接口</b><div class="tw"><table><tr><th style="width:70px">方法</th><th>路径</th><th>说明</th><th style="width:60px">类型</th><th style="width:140px">调用端</th></tr>
+      ${P['接口'].map(a=>`<tr><td class="mono small">${esc(a['方法'])}</td><td class="mono small">${esc(a['路径'])}</td><td class="small">${esc(a['说明']||'')}</td><td class="small">${esc(a['类型']||'')}</td><td class="small">${esc((a['调用端']||[]).join('、'))}</td></tr>`).join('')}</table></div></div>`:''}
+    ${(P['数据']||[]).length?`<div style="margin-top:8px"><b class="small">数据</b><ul class="small" style="margin:2px 0;padding-left:16px">${P['数据'].map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`:''}
+    ${(P['待确认']||[]).length?`<div style="margin-top:8px"><b class="small">待确认（${P['待确认'].length}）</b><ol class="small" style="margin:2px 0;padding-left:20px">${P['待确认'].map(q=>`<li>${esc(q['问题'])}${q['建议']?`<div class="mut">建议：${esc(q['建议'])}</div>`:''}</li>`).join('')}</ol></div>`:''}
+    ${v['契约']?`<details style="margin-top:8px"><summary class="small"><b>接口契约</b> <span class="mut mono">${esc(v['契约路径'])}</span></summary><pre class="small" style="max-height:420px;overflow:auto">${esc(v['契约'])}</pre></details>`:''}</div>`:'';
+  const SB={排队中:'st-收集中',开发中:'st-开发中',待审查:'st-已批准开发',审查中:'st-已批准开发',打回修改:'st-已暂停',审查通过:'st-已完成',要你看:'st-已暂停2',失败:'st-已暂停2',已停止:''};
+  const D=v['开发']||[],canDev=['已拍板','开发中','各端完成'].includes(st);
+  const CR=v['变更']||[],CRS={待评估:'st-收集中',评估中:'st-开发中',待拍板:'st-已批准开发',已纳入:'st-已完成',已驳回:''};
+  const crBox=(P||CR.length)?`<div style="margin-top:14px"><div class="row" style="gap:8px"><b>变更</b><span class="mut small">做的过程中发现要改需求、要别的端配合、要改接口：提出来，AI 出增量方案，你拍板后受影响的端自动补做</span></div>
+    ${CR.length?`<div class="tw" style="margin-top:6px"><table><tr><th style="width:70px">编号</th><th>内容</th><th style="width:130px">来源</th><th style="width:90px">状态</th><th style="width:60px"></th></tr>
+      ${CR.slice().reverse().map(x=>`<tr><td class="mono small">${esc(x['编号'])}</td><td><b class="small">${esc(x['标题'])}</b>${x['说明']?`<div class="small mut">${esc(x['说明'])}</div>`:''}${(x['影响端']||[]).length?`<div class="small mut">可能影响：${esc(x['影响端'].join('、'))}</div>`:''}</td>
+        <td class="small mut">${esc(x['来源'])}<div>${esc(x['时间'])}</div></td><td><span class="badge ${CRS[x['状态']]||''}">${esc(x['状态'])}</span>${x['纳入方案']?`<div class="small mut">方案 ${esc(x['纳入方案'])}</div>`:''}</td>
+        <td>${['待评估','待拍板'].includes(x['状态'])?`<a class="small mut" data-crx="${esc(x['编号'])}">驳回</a>`:''}</td></tr>`).join('')}</table></div>`:''}
+    <div class="row" style="gap:6px;margin-top:6px;flex-wrap:wrap"><input type="text" id="crT" placeholder="要变什么，如：iOS 也要兼容新的返回字段" style="flex:1;min-width:260px">
+      ${['服务端','Web','iOS','Android','鸿蒙'].map(e=>`<label class="small row" style="gap:2px"><input type="checkbox" data-cre="${e}" style="width:auto;margin:0">${e}</label>`).join('')}<button id="crGo">＋ 变更</button></div></div>`:'';
+  const EV=v['证据'],evBox=EV&&D.length?`<div style="margin-top:14px"><div class="row" style="gap:8px"><b>证据包</b><span class="mut small">需求 × 端：开发会话汇报的完成度、审查结论</span><span style="flex:1"></span>
+      ${EV['可验收']?`<button class="pri" id="stAcc">✓ 验收（拍板 2）</button>`:''}${(v['全栈']||{})['状态']==='已验收'?'<span class="badge st-已完成">已验收</span>':''}</div>
+    <div class="tw" style="margin-top:6px"><table><tr><th style="width:80px">需求</th><th>标题</th>${[...new Set(EV['需求'].flatMap(r=>Object.keys(r['端'])))].map(e=>`<th style="width:120px">${esc(e)}</th>`).join('')}</tr>
+      ${(()=>{const es=[...new Set(EV['需求'].flatMap(r=>Object.keys(r['端'])))];return EV['需求'].map(r=>`<tr><td class="mono small">${esc(r['编号'])}</td><td class="small">${esc(r['标题'])} <span class="mut">验收 ${r['验收']} 条</span></td>
+        ${es.map(e=>{const c=r['端'][e];if(!c)return'<td class="mut small">—</td>';const ok=c['审查']==='通过'&&String(c['完成度']).startsWith('完成');
+          return `<td class="small"><span class="badge ${ok?'st-已完成':c['高']?'st-已暂停2':c['完成度']?'st-已暂停':''}">${ok?'✓ 通过':esc(c['完成度']||c['状态'])}</span>${c['问题']?`<div class="mut">问题 ${c['问题']} 个</div>`:''}</td>`}).join('')}</tr>`).join('')})()}</table></div>
+    ${EV['可验收']&&!EV['全部通过']?'<div class="small" style="color:var(--s4);margin-top:4px">还有没完全通过的需求：可以提变更、重新开工某一端，或者带着问题验收</div>':''}</div>`:'';
+  const devTbl=canDev?`<div style="margin-top:14px"><div class="row" style="gap:8px"><b>各端开发</b><span class="mut small">同时最多 ${v['并行上限']} 个端在跑；每端做完由独立的审查会话对照需求、契约、设计挑错，打回最多 ${v['审查轮数']} 轮</span>
+      <span style="flex:1"></span>${!D.length?'<button class="pri" id="stDev">▶ 各端开工</button>':''}</div>
+    ${D.length?`<div class="tw" style="margin-top:6px"><table><tr><th style="width:70px">端</th><th style="width:110px">状态</th><th>汇报</th><th>审查</th><th style="width:120px"></th></tr>
+    ${D.map(x=>{const rp=x['汇报']||{},rv=x['审查']||{};return `<tr><td><b>${esc(x['端'])}</b></td>
+      <td><span class="badge ${SB[x['状态']]||''}">${x['在跑']?'● ':''}${esc(x['状态'])}</span>${x['轮次']?`<div class="small mut">第 ${x['轮次']} 轮修改</div>`:''}${x['等待']?`<div class="small mut">等待：${esc(x['等待'])}</div>`:''}${x['用mock']?'<div class="small mut">按契约 mock</div>':''}${x['联调']?'<div class="small mut">联调轮</div>':''}</td>
+      <td class="small">${rp['总结']?esc(rp['总结']):'<span class="mut">—</span>'}${rp['提交']?`<div class="mono mut">${esc(rp['提交'])}</div>`:''}${rp['证据']?`<details><summary class="mut">证据</summary>${esc(rp['证据'])}</details>`:''}
+        ${x['结果']&&['失败','要你看'].includes(x['状态'])?`<div style="color:var(--s4)">${esc(x['结果'])}</div>`:''}</td>
+      <td class="small">${rv['结论']?`<span class="badge ${rv['结论']==='通过'?'st-已完成':'st-已暂停'}">${esc(rv['结论'])}</span> ${esc(rv['总结']||'')}
+        ${(rv['问题']||[]).length?`<details><summary class="mut">问题 ${rv['问题'].length} 个</summary><ul style="margin:2px 0;padding-left:16px">${rv['问题'].map(i=>`<li>[${esc(i['严重度']||'')}] ${esc(i['需求']||'')} ${esc(i['问题']||'')} <span class="mut mono">${esc(i['位置']||'')}</span></li>`).join('')}</ul></details>`:''}`:'<span class="mut">—</span>'}</td>
+      <td>${x['在跑']||x['状态']==='排队中'?`<button class="small" data-stop="${esc(x['端'])}">停止</button>`:`<button class="small" data-redev="${esc(x['端'])}">重新开工</button>`}</td></tr>`}).join('')}</table></div>`:''}</div>`:'';
+  box.innerHTML=`<div class="small mut" style="margin-bottom:8px">选这一期涉及的端和仓库（远程机器写 user@主机:/路径），AI 读资料、设计稿和代码，出需求规格、设计对照、影响分析和接口契约，你拍板一次后各端再开工。</div>
+    <div class="tw"><table><tr><th style="width:70px">端</th><th>仓库</th><th style="width:240px">分支</th><th>开发流程</th></tr>${ends}</table></div>
+    <div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap">
+      ${run?`<span class="small"><span class="badge st-开发中">● 出方案中</span> <span class="mut">${esc(v['会话']['引擎']||'')} · ${esc(v['会话']['开始时间']||'')} 开始</span></span>`
+        :st==='待拍板'?`<button class="pri" id="stOk">✓ 拍板</button><input type="text" id="stNote" placeholder="哪里不对，写意见后重出方案" style="flex:1;min-width:240px"><button id="stRe">重出方案</button>`
+        :`<button class="pri" id="stGo">🧭 ${P?'重出方案':'出方案'}</button>${P?'<input type="text" id="stNote" placeholder="意见（可空）" style="flex:1;min-width:240px">':''}`}
+      ${st==='出方案失败'&&v['会话']?`<span class="small" style="color:var(--s4)">上次没出来：${esc((v['会话']['结果']||'').slice(0,160))}</span>`:''}</div>
+    ${devTbl}${evBox}${crBox}${plan}`;
+  if($('#crGo'))$('#crGo').onclick=async()=>{const t=$('#crT').value.trim();if(!t)return toast('写一句要变什么');
+    const ends=[...box.querySelectorAll('[data-cre]:checked')].map(c=>c.dataset.cre);
+    try{toast((await post('/api/stack/change',{period:name,title:t,ends})).msg)}catch(e){toast(e.message)}stackBox(name)};
+  box.querySelectorAll('[data-crx]').forEach(a=>a.onclick=async()=>{if(!confirm(`驳回 ${a.dataset.crx}？`))return;try{toast((await post('/api/stack/reject',{period:name,id:a.dataset.crx})).msg)}catch(e){toast(e.message)}stackBox(name)});
+  if($('#stAcc'))$('#stAcc').onclick=async()=>{if(!confirm('验收这一期？看过证据包，确认各端做完（这一期会标为已完成，之后照常处理 Bug）。'))return;
+    try{toast((await post('/api/stack/accept',{period:name})).msg)}catch(e){toast(e.message)}render()};
+  if($('#stDev'))$('#stDev').onclick=async()=>{if(!confirm('各端开工？涉及的端会各起一个 AI 会话按拍板的方案开发（= 你批准开发）。'))return;
+    try{toast((await post('/api/stack/dev',{period:name})).msg)}catch(e){toast(e.message)}stackBox(name)};
+  box.querySelectorAll('[data-stop]').forEach(b=>b.onclick=async()=>{if(!confirm(`停止 ${b.dataset.stop}？`))return;try{toast((await post('/api/stack/stop',{period:name,end:b.dataset.stop})).msg)}catch(e){toast(e.message)}stackBox(name)});
+  box.querySelectorAll('[data-redev]').forEach(b=>b.onclick=async()=>{if(!confirm(`${b.dataset.redev} 重新开工？`))return;try{toast((await post('/api/stack/dev',{period:name,end:b.dataset.redev})).msg)}catch(e){toast(e.message)}stackBox(name)});
+  box.querySelectorAll('[data-send]').forEach(sel=>sel.onchange=async()=>{let repo=sel.value;
+    if(repo==='__other'){repo=prompt(`${sel.dataset.send} 的仓库地址：本机写路径，远程写 user@主机:/路径`,'');if(!repo){stackBox(name);return}}
+    try{toast((await post('/api/stack/end',{period:name,end:sel.dataset.send,repo})).msg);stackRepos=null}catch(e){toast(e.message)}stackBox(name)});
+  box.querySelectorAll('[data-sbr]').forEach(i=>i.onchange=async()=>{const r=v['各端'].find(x=>x['端']===i.dataset.sbr);
+    try{toast((await post('/api/stack/end',{period:name,end:r['端'],repo:r['仓库'],branch:i.value.trim()})).msg)}catch(e){toast(e.message)}stackBox(name)});
+  const go=async()=>{try{toast((await post('/api/stack/plan',{period:name,note:$('#stNote')?$('#stNote').value.trim():''})).msg)}catch(e){toast(e.message)}stackBox(name)};
+  if($('#stGo'))$('#stGo').onclick=go;if($('#stRe'))$('#stRe').onclick=go;
+  if($('#stOk'))$('#stOk').onclick=async()=>{if(!confirm('拍板这份方案？接口契约会锁成一个版本，之后各端按它开发。'))return;
+    try{toast((await post('/api/stack/approve',{period:name})).msg)}catch(e){toast(e.message)}stackBox(name)};
+  if(run||D.some(x=>x['在跑']||['排队中','待审查','打回修改'].includes(x['状态'])))setTimeout(()=>{if(curPeriod()===name)stackBox(name)},6000);
 }
 // ---------------- 构建：这一期在构建平台（如 Jenkins）上的产出，按分支自动对应任务
 const BRES={SUCCESS:['st-已完成','成功'],FAILURE:['st-已暂停2','失败'],UNSTABLE:['st-已暂停','不稳定'],ABORTED:['','已中止'],进行中:['st-开发中','● 构建中']};
@@ -1677,6 +1807,13 @@ async function settingsPage(){
     <p class="mut">后台干活用哪个编程 AI：开始开发、模糊添加、来源更新、生成流程。开发面板可以给每一期单独选，其余用默认引擎。
     引擎要<b>能无人值守运行</b>并<b>接入知识库</b>（用 kb_ask 等工具在网页上找你确认）。权限相关的启动参数决定 AI 能在仓库里做什么，内置预设只用常规权限模式，请按团队安全要求调整。</p>
     <div class="bgrid">${d.engines.map(ecard).join('')}</div>
+    <h3 style="margin-top:16px">按角色分配</h3>
+    <p class="mut small">你只下发任务、拍板，后面的活交给不同的 AI：每类工作选用哪个引擎（留空 = 跟随上一级：按端 → 这一类 → 这一期选的 → 默认）。审查建议和开发用不同的引擎。</p>
+    ${(()=>{const R=d.roles,opt=v=>`<option value="">— 跟随 —</option>${d.engines.map(e=>`<option value="${esc(e.id)}" ${e.id===v?'selected':''}>${esc(e['名称'])}${e['默认']?'（默认）':''}</option>`).join('')}`;
+      return `<div class="tw"><table><tr><th style="width:110px">角色</th><th>做什么</th><th style="width:220px">用哪个引擎</th></tr>
+        ${R['角色'].map(r=>`<tr><td><b>${esc(r['角色'])}</b></td><td class="small mut">${esc(r['说明'])}</td><td><select data-role="${esc(r['角色'])}">${opt(r['引擎'])}</select></td></tr>`).join('')}</table></div>
+      <details style="margin-top:6px"><summary class="small">按端单独指定（如 iOS 开发用 Codex）</summary><div class="tw"><table><tr><th>端</th><th>开发</th><th>审查</th></tr>
+        ${['服务端','Web','iOS','Android','鸿蒙'].map(e=>`<tr><td><b>${e}</b></td><td><select data-role="开发·${e}">${opt(R['按端']['开发·'+e])}</select></td><td><select data-role="审查·${e}">${opt(R['按端']['审查·'+e])}</select></td></tr>`).join('')}</table></div></details>`})()}
     <div class="row" style="justify-content:space-between;margin-top:18px"><h2>开发流程</h2><div class="row"><button id="flImp">导入</button><button id="flNew">＋ 新建空白流程</button><button class="pri" id="flCmd">＋ 从命令 / 技能添加</button></div></div>
     <p class="mut">点「开始开发」后，后台 AI 按开发流程干活：怎么认代码仓库、文档目录放哪、按什么步骤推进、什么时候要你确认、进度怎么看。
     默认是「通用模板」；已有自己的流程命令（如 <code>/my-flow</code>）的，点<b>「从命令 / 技能添加」</b>选中它即可自动生成，不用写脚本；
@@ -1699,6 +1836,7 @@ async function settingsPage(){
       <div class="row"><button class="pri" id="plGo">添加</button></div></div>`);
     $('#plGo').onclick=async()=>{try{toast((await post('/api/plugin/dir',{path:$('#plP').value.trim()})).msg);dlg.close();render()}catch(e){toast(e.message)}}};
   const strip=o=>{['id','内置','已修改','默认','状态','接入说明'].forEach(k=>delete o[k]);return o};
+  app.querySelectorAll('[data-role]').forEach(sel=>sel.onchange=async()=>{try{toast((await post('/api/engine/role',{role:sel.dataset.role,engine:sel.value})).msg)}catch(e){toast(e.message)}});
   app.querySelectorAll('[data-eed]').forEach(b=>b.onclick=()=>engineDlg(d,eById(b.dataset.eed)));
   app.querySelectorAll('[data-ecp]').forEach(b=>b.onclick=()=>{const e=strip({...eById(b.dataset.ecp)});e['名称']+='（副本）';engineDlg(d,e)});
   $('#enNew').onclick=()=>{const e=strip({...eById('claude')});e['名称']='';e['说明']='';e['命令']='';e['接入命令']='';engineDlg(d,e)};
@@ -1789,7 +1927,7 @@ async function basePage(){
     ${e['备注']?`<div class="small md" style="margin-top:4px">${md(e['备注']).html}</div>`:''}</div>`;
   app.innerHTML=`<div class="row" style="justify-content:space-between"><h1>🗂 基础知识库</h1><button class="pri" id="bAdd">＋ 新增</button></div>
     <p class="mut">所有期共用的基础上下文：网站账号、测试账号、Wi-Fi / 代理 / VPN、环境配置等。Claude 回答和开发时会自动参考。
-    密码等<b>机密字段只存 macOS 钥匙串</b>，页面默认隐藏；也可以直接跟 Claude 说「把 XX 测试账号记到基础知识库」。</p>
+    密码等<b>机密字段只存钥匙串（Mac）或加密文件（服务器）</b>，页面默认隐藏；也可以直接跟 Claude 说「把 XX 测试账号记到基础知识库」。</p>
     ${es.length?d.cats.filter(c=>es.some(e=>e['分类']===c)).map(c=>`<h2>${esc(c)}</h2><div class="bgrid">${es.filter(e=>e['分类']===c).map(card).join('')}</div>`).join('')
       :'<p class="mut">还没有内容，点右上角「＋ 新增」。</p>'}
     ${d.files.length?`<h2>文件</h2><ul class="files">${d.files.map(f=>`<li><a data-rf="${esc(f.path)}">${esc(f.path.slice(d.dir.length+1))}</a><span class="mut small">${size(f.size)} · ${when(f.mtime)}</span></li>`).join('')}</ul>`:''}
@@ -1810,7 +1948,7 @@ async function basePage(){
       <label>分类<select id="bC">${d.cats.map(c=>`<option ${e&&e['分类']===c?'selected':''}>${c}</option>`).join('')}</select></label>
       <label>名称<input type="text" id="bN" value="${esc(e?e['名称']:'')}" placeholder="如：测试账号（国内）/ 办公室 Wi-Fi / 抓包代理"></label>
       <label>适用（产品 / 场景，可空）<input type="text" id="bS" value="${esc(e?e['适用']:'')}"></label>
-      <div><div class="small mut" style="margin-bottom:4px">字段（勾选「机密」的只存钥匙串）</div><div id="bF" style="display:grid;gap:6px">${fs.map(row).join('')}</div>
+      <div><div class="small mut" style="margin-bottom:4px">字段（勾选「机密」的单独加密保存）</div><div id="bF" style="display:grid;gap:6px">${fs.map(row).join('')}</div>
         <a class="small" id="bFA" style="display:inline-block;margin-top:6px">＋ 添加字段</a></div>
       <label>备注（可空，支持 Markdown）<textarea id="bR" rows="3">${esc(e?e['备注']:'')}</textarea></label>
       <div class="row"><button class="pri" id="bGo">保存</button>${e?'<button class="danger" id="bDel">删除这条</button>':''}</div></div>`);
@@ -1819,7 +1957,7 @@ async function basePage(){
     bind();$('#bFA').onclick=()=>{$('#bF').insertAdjacentHTML('beforeend',row({'名':'','值':'','机密':false}));bind()};
     $('#bGo').onclick=async()=>{const fields=[...$('#bF').querySelectorAll('.frow')].map(r=>({'名':r.querySelector('.fN').value.trim(),'值':r.querySelector('.fV').value,'机密':r.querySelector('.fS').checked})).filter(f=>f['名']);
       try{const r=await post('/api/base/save',{id:e?e['编号']:'',category:$('#bC').value,name:$('#bN').value,scope:$('#bS').value,note:$('#bR').value,fields});dlg.close();toast(r.msg.split('\n')[0]);render()}catch(x){toast(x.message)}};
-    if(e)$('#bDel').onclick=async()=>{if(!confirm('删除「'+e['名称']+'」？机密字段也会从钥匙串删除。'))return;
+    if(e)$('#bDel').onclick=async()=>{if(!confirm('删除「'+e['名称']+'」？机密字段也会一起删除。'))return;
       try{const r=await post('/api/base/save',{id:e['编号'],delete:true});dlg.close();toast(r.msg);render()}catch(x){toast(x.message)}};
     $('#bN').focus()};
   $('#bAdd').onclick=()=>edit(null);

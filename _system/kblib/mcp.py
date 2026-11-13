@@ -33,6 +33,9 @@ from .bugs.fix import bug_fixed
 from .talk import take_session_msgs
 from .builds import builds_text
 from .memo import task_item_set, task_items
+from .stack import stack_change_add, stack_plan_submit
+from .stackdev import stack_report, stack_review
+from .hosts import repo_read
 from .anr.store import anr_add, anr_link, anr_list, anr_mapping, anr_set_version, anr_show
 
 
@@ -91,7 +94,10 @@ INSTRUCTIONS = """本地知识库（按「期」管理需求 / 设计图 / 接�
    先 kb_plugin_call 不带参数看有哪些插件、各要什么参数，再带参数调用；结果以插件输出为准。
    外部系统的内容只做索引：推动解决时建 / 关联事项，用 kb_add_note 记下来源（编号、地址、一句话简介），不要把整段原文存进知识库，处理时重新调用插件拉最新内容。
 15. 构建：挂了构建插件（如 Jenkins）时，每一期按分支对应构建任务。要测试包、对版本号、找某次构建的提交或 mapping 时用 kb_builds 查，不要自己猜地址；
-   只读，不要触发构建。崩溃日志版本没有 mapping 时，kb_builds 里同版本构建的 mapping 地址可以下载后用 kb_anr_mapping 归档。"""
+   只读，不要触发构建。崩溃日志版本没有 mapping 时，kb_builds 里同版本构建的 mapping 地址可以下载后用 kb_anr_mapping 归档。
+16. 全栈：一期可以挂多个端（服务端 / Web / iOS / Android / 鸿蒙）的仓库，仓库可能在远程机器（地址形如 user@host:/path），用 kb_repo_read 只读查看。
+   各端开发会话做完用 kb_stack_report 汇报，审查会话用 kb_stack_review 交结论；做的过程中发现要别的端配合、要改需求或契约，用 kb_stack_change 提，不要自己改别的端。
+   网页「出方案」启动的会话最后用 kb_stack_plan 交回需求规格、设计对照、影响分析和接口契约；拍板只能用户本人在网页上点。"""
 
 S = lambda **props: {'type': 'object', 'properties': props}
 STR = lambda d: {'type': 'string', 'description': d}
@@ -231,6 +237,25 @@ TOOLS = [
     ('kb_task_item', '记下事项里某一条的处理结果（网页上每条单独「推动」时，处理完用它把结论记回这一条）。不带 item = 列出这个事项的条目和状态。',
      S(iteration=STR('事项名'), item=STR('条目键，如 anr:6c8592be、bug:82613、E001'),
        status=STR('已解决 / 没解决 / 待确认 / 推动中'), conclusion=STR('结论一两句：根因、改了什么、提交号')), ['iteration']),
+    ('kb_stack_plan', '全栈方案会话交回「需求规格 + 设计对照 + 影响分析 + 接口契约」（网页「出方案」启动的会话最后调用一次）。交回后等用户在网页上拍板，不要自己拍板。',
+     S(iteration=STR('期名'), plan=STR('方案 JSON 字符串：{摘要, 需求:[{编号 REQ-001, 标题, 描述, 验收:[…], 端, 设计, 来源}], 设计对照:{缺设计, 设计多出, 缺状态, 端不一致, 无法核对}, 各端:[{端, 涉及, 原因, 改动:[…], 工作量, 风险}], 接口:[{方法, 路径, 说明, 类型, 调用端}], 数据:[…], 待确认:[{问题, 建议}]}'),
+       openapi=STR('OpenAPI 3 YAML 全文（只含新增 / 修改的接口；没有接口留空）')), ['iteration', 'plan']),
+    ('kb_stack_report', '全栈各端开发会话做完时汇报一次（网页「各端开工」启动的会话用）：之后会有独立的审查会话检查。',
+     S(iteration=STR('期名'), end=STR('服务端 / Web / iOS / Android / 鸿蒙'), status=STR('完成 / 卡住'), summary=STR('做了什么；卡住的话卡在哪'),
+       reqs=STR('JSON：{"REQ-001": "完成", "REQ-002": "部分：原因"}'), evidence=STR('自测证据：编译、测试结果、截图路径'),
+       commits=STR('提交号，逗号分隔')), ['iteration', 'end', 'status']),
+    ('kb_stack_change', '全栈开发中发现方案要变：需求得改、别的端必须配合 / 兼容、接口契约得改、方案漏了东西。提出来后知识库自动出增量方案给用户拍板，'
+                        '拍板后受影响的端会收到要补做的内容。不要自己去改别的端或契约。',
+     S(iteration=STR('期名'), title=STR('一句话：要变什么'), detail=STR('为什么、发现于哪里、建议怎么改'),
+       ends=STR('可能影响的端，顿号分隔：服务端、Web、iOS、Android、鸿蒙'), from_end=STR('你是哪个端的会话（可空）')), ['iteration', 'title']),
+    ('kb_stack_review', '全栈各端审查会话交回结论（只读审查会话用）。',
+     S(iteration=STR('期名'), end=STR('服务端 / Web / iOS / Android / 鸿蒙'), verdict=STR('通过 / 打回'),
+       issues=STR('JSON 列表：[{"需求": "REQ-001", "严重度": "高/中/低", "问题": "…", "位置": "文件:行"}]'), summary=STR('一两句')),
+     ['iteration', 'end', 'verdict']),
+    ('kb_repo_read', '只读查看某个端的代码仓库（本机或远程机器都行，远程走 ssh）：ls / tree / cat / grep / find / git-log / git-show。'
+                     '远程仓库没法直接读文件时用它；本机仓库直接读也可以。',
+     S(repo=STR('仓库地址，如 /Users/me/app 或 user@host:/srv/app'), op=STR('ls / tree / cat / grep / find / git-log / git-show'),
+       arg=STR('路径（相对仓库根目录）/ 搜索词 / 文件名通配 / 提交号')), ['repo', 'op']),
     ('kb_plugin_call', '调用按需「工具」插件（用户自己装的，如按会话编号拉取外部系统的会话内容）。不带 plugin = 列出可用插件和参数说明。'
                        '插件需要的账号由知识库从基础信息交给插件，不要自己找密码。',
      S(plugin=STR('插件 id（先不带参数调用一次看有哪些）'), args={'type': 'array', 'items': {'type': 'string'}, 'description': '传给插件的参数'},
@@ -363,6 +388,17 @@ def _call_tool(name, a):
             return '\n'.join(f'- {x["键"]} ［{x["状态"]}］{x["标题"]}' + (f'\n  结论：{x["结论"]}' if x.get('结论') else '')
                              for x in task_items(g('iteration'))) or '这个事项还没有条目'
         return task_item_set(g('iteration'), g('item'), g('status') or '', g('conclusion') or '')
+    if name == 'kb_stack_plan':
+        return stack_plan_submit(g('iteration'), g('plan'), g('openapi') or '')
+    if name == 'kb_stack_report':
+        return stack_report(g('iteration'), g('end'), g('status'), g('summary') or '', g('reqs'), g('evidence') or '', g('commits') or '')
+    if name == 'kb_stack_change':
+        return stack_change_add(g('iteration'), g('title'), g('detail') or '', g('ends') or '',
+                                by=f'{g("from_end")}开发会话' if g('from_end') else 'Claude')
+    if name == 'kb_stack_review':
+        return stack_review(g('iteration'), g('end'), g('verdict'), g('issues'), g('summary') or '')
+    if name == 'kb_repo_read':
+        return repo_read(g('repo'), g('op'), g('arg') or '')
     if name == 'kb_builds':
         return builds_text(g('iteration'), int(g('count') or 5))
     if name == 'kb_plugin_call':
@@ -399,14 +435,35 @@ def _call_tool(name, a):
     raise KBError(f'未知工具：{name}')
 
 
+def handle(msg):
+    """处理一条 MCP JSON-RPC 消息（本机 stdio 和远程会话的 HTTP 共用）；通知类消息返回 None。"""
+    mid, method = msg.get('id'), msg.get('method')
+    if mid is None:
+        return None
+    params = msg.get('params') or {}
+    if method == 'initialize':
+        res = {'protocolVersion': params.get('protocolVersion', '2025-06-18'),
+               'capabilities': {'tools': {}}, 'serverInfo': {'name': 'kb', 'version': '1.0.0'},
+               'instructions': INSTRUCTIONS}
+    elif method == 'tools/list':
+        res = {'tools': [{'name': n, 'description': d, 'inputSchema': {**s, 'required': r}} for n, d, s, r in TOOLS]}
+    elif method == 'tools/call':
+        try:
+            text, err = call_tool(params.get('name'), params.get('arguments') or {}), False
+        except KBError as e:
+            text, err = str(e), True
+        except Exception as e:
+            text, err = f'内部错误：{e!r}', True
+        res = {'content': [{'type': 'text', 'text': text}], 'isError': err}
+    elif method == 'ping':
+        res = {}
+    else:
+        return {'jsonrpc': '2.0', 'id': mid, 'error': {'code': -32601, 'message': f'未实现：{method}'}}
+    return {'jsonrpc': '2.0', 'id': mid, 'result': res}
+
+
 def serve():
     init()
-    tools = [{'name': n, 'description': d, 'inputSchema': {**s, 'required': r}} for n, d, s, r in TOOLS]
-
-    def send(obj):
-        sys.stdout.write(json.dumps(obj, ensure_ascii=False) + '\n')
-        sys.stdout.flush()
-
     for line in sys.stdin:
         line = line.strip()
         if not line:
@@ -415,27 +472,7 @@ def serve():
             msg = json.loads(line)
         except ValueError:
             continue
-        mid, method = msg.get('id'), msg.get('method')
-        if mid is None:
-            continue
-        params = msg.get('params') or {}
-        if method == 'initialize':
-            res = {'protocolVersion': params.get('protocolVersion', '2025-06-18'),
-                   'capabilities': {'tools': {}}, 'serverInfo': {'name': 'kb', 'version': '1.0.0'},
-                   'instructions': INSTRUCTIONS}
-        elif method == 'tools/list':
-            res = {'tools': tools}
-        elif method == 'tools/call':
-            try:
-                text, err = call_tool(params.get('name'), params.get('arguments') or {}), False
-            except KBError as e:
-                text, err = str(e), True
-            except Exception as e:
-                text, err = f'内部错误：{e!r}', True
-            res = {'content': [{'type': 'text', 'text': text}], 'isError': err}
-        elif method == 'ping':
-            res = {}
-        else:
-            send({'jsonrpc': '2.0', 'id': mid, 'error': {'code': -32601, 'message': f'未实现：{method}'}})
-            continue
-        send({'jsonrpc': '2.0', 'id': mid, 'result': res})
+        out = handle(msg)
+        if out is not None:
+            sys.stdout.write(json.dumps(out, ensure_ascii=False) + '\n')
+            sys.stdout.flush()

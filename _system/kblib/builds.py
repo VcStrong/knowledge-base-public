@@ -36,6 +36,7 @@ def period_branches(d, m=None):
     s = dev_session(d.name) or {}
     if s.get('分支'):
         out.append(s['分支'])
+    out += [v['分支'] for v in (m.get('各端') or {}).values() if v.get('分支')]      # 全栈：各端的分支都去对构建任务
     return list(dict.fromkeys(b for b in out if b and b not in ('master', 'main', 'develop')))
 
 

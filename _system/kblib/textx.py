@@ -1,5 +1,6 @@
 # From 大大王.DT
 """文本提取：Office / PDF / 网页 / 图片说明 → 纯文本。"""
+import html
 import re
 import subprocess
 import xml.etree.ElementTree as ET
@@ -58,6 +59,29 @@ def pdf_text(p: Path):
     return '\n\n'.join(f'## 第 {i} 页\n{pg.extract_text() or ""}' for i, pg in enumerate(pages, 1))
 
 
+def office_text(p: Path):
+    """Word / RTF 等转文字：Mac 用 textutil；Linux 服务器上 .docx 直接解析，其余用 LibreOffice（装了的话）。"""
+    import shutil
+    if shutil.which('textutil'):
+        return subprocess.run(['textutil', '-convert', 'txt', '-stdout', str(p)],
+                              capture_output=True, timeout=60).stdout.decode('utf-8', 'replace')
+    if p.suffix.lower() == '.docx':
+        import zipfile
+        with zipfile.ZipFile(p) as z:
+            xml = z.read('word/document.xml').decode('utf-8', 'replace')
+        xml = re.sub(r'</w:p>', '\n', xml)
+        xml = re.sub(r'<w:tab/>', '\t', xml)
+        return html.unescape(re.sub(r'<[^>]+>', '', xml))
+    lo = shutil.which('soffice') or shutil.which('libreoffice')
+    if lo:
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            subprocess.run([lo, '--headless', '--convert-to', 'txt:Text', '--outdir', td, str(p)], capture_output=True, timeout=120)
+            out = Path(td) / (p.stem + '.txt')
+            return out.read_text('utf-8', 'replace') if out.exists() else ''
+    return ''
+
+
 def extract(p: Path):
     ext = p.suffix.lower()
     try:
@@ -67,8 +91,7 @@ def extract(p: Path):
         if ext in ('.html', '.htm'):
             return html_text(read_text(p))
         if ext in OFFICE_EXT:
-            return subprocess.run(['textutil', '-convert', 'txt', '-stdout', str(p)],
-                                  capture_output=True, timeout=60).stdout.decode('utf-8', 'replace')
+            return office_text(p)
         if ext == '.pdf':
             return pdf_text(p)
         if ext == '.xlsx':

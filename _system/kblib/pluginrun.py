@@ -16,6 +16,7 @@ from pathlib import Path
 from .common import PERIODS, KBError, now
 from .periods import load_meta, log, period_dir, period_names
 from .baseinfo import base_load
+from . import hosts
 from .plugins import _git_changed, get_plugin, run_plugins
 from .devprep import _git
 
@@ -32,9 +33,13 @@ def base_repo_paths():
     for e in base_load()['条目']:
         for f in e.get('字段') or []:
             v = (f.get('值') or '').strip()
-            if not f.get('机密') and v.startswith(('/', '~')):
+            if f.get('机密'):
+                continue
+            if v.startswith(('/', '~')):
                 p = Path(v).expanduser()
                 out.append({'名称': e['名称'], '编号': e['编号'], '路径': str(p), 'git': (p / '.git').exists()})
+            elif hosts.is_remote(v) and '路径' in (f.get('名') or ''):   # 远程工程：字段名含「路径」，值 user@host:/path 或 ssh://user@host:port/path
+                out.append({'名称': e['名称'], '编号': e['编号'], '路径': v, 'git': True, '远程': True})
     return out
 
 
@@ -51,7 +56,7 @@ def plugin_targets():
         m = load_meta(d)
         ps.append({'名称': n, '分支': _period_branch(d, m), '仓库': m.get('开发仓库', ''), '状态': m.get('状态', '')})
     ps.sort(key=lambda x: x['状态'] == '已完成')
-    return {'期': ps, '仓库': base_repo_paths()}
+    return {'期': ps, '仓库': [x for x in base_repo_paths() if not x.get('远程')]}   # 「运行一次」先只在本机跑
 
 
 def _resolve(target, repo):

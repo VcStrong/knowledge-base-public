@@ -8,6 +8,25 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 from . import lazy
+import contextvars
+
+# 会话身份（KB_SESSION / KB_PERIOD）：本机后台会话从环境变量来；远程会话经网页的 /mcp 调用时按请求设置，不改进程环境
+_SESS_ENV = contextvars.ContextVar('kb_sess_env', default=None)
+
+
+def sess_env(k, default=''):
+    o = _SESS_ENV.get()
+    if o is not None and k in o:
+        return o[k]
+    return os.environ.get(k, default)
+
+
+def with_sess_env(env, fn, *a, **kw):
+    tok = _SESS_ENV.set(dict(env))
+    try:
+        return fn(*a, **kw)
+    finally:
+        _SESS_ENV.reset(tok)
 _flows = lazy('kblib.flows')      # 上层模块：用到时才 import（不形成循环）
 
 
