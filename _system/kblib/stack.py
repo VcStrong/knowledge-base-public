@@ -24,6 +24,7 @@ from .flows import flow_for
 from .pluginrun import base_repo_paths
 from . import lazy
 _stackdev = lazy('kblib.stackdev')      # 上层模块：用到时才 import
+_fix = lazy('kblib.bugs.fix')
 
 ENDS = ('服务端', 'Web', 'iOS', 'Android', '鸿蒙')
 STACK_DIR = '全栈'
@@ -224,6 +225,10 @@ def stack_plan_start(name, note='', by='用户（网页）'):
         for x in crs:
             x['状态'] = '评估中'
         save_meta(d, m)
+    dev = m.get('各端开发') or {}
+    for e, v in ends.items():             # 分析代码前更新：这一端有会话在改就只 fetch，不动它的工作区
+        busy = dev.get(e, {}).get('状态') in ('开发中', '审查中') or (not hosts.is_remote(v['仓库']) and _fix._repo_busy(v['仓库']))
+        log(d, '更新代码', f'{e} 出方案前：' + hosts.sync(v['仓库'], v.get('版本库', ''), branch=v.get('分支', ''), fetch_only=bool(busy)))
     design_previews(d)                    # PSD 等先转好 PNG 预览，AI 才看得到
     eng = role_engine('方案', m)
     _sdir(d).mkdir(exist_ok=True)

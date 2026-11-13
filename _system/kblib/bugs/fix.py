@@ -246,13 +246,14 @@ def _fx_start(root, branch, part, by='修复队列'):
     sid = datetime.now().strftime('%Y%m%d-%H%M%S-') + uuid_hex()[:4]
     (ZT_DIR / '分析会话').mkdir(parents=True, exist_ok=True)
     logf = ZT_DIR / '分析会话' / f'修复-{sid}.jsonl'
+    up = hosts.sync(root, 'svn' if _is_svn(root) else 'git')      # 开发前更新代码（队列已保证分支对、工作区干净）
     head = hosts.head(root, 'svn') if _is_svn(root) else _git(rp, 'rev-parse', 'HEAD').stdout.strip()
     o = part[0].get('归属') or {}
     proc = engine_popen(eng, _fx_prompt(root, branch, part), f'kb·修复·Bug {"、".join(e["编号"] for e in part)}', logf, root,
                         env_extra=dict(_dev_env(o.get('名称') or 'Bug 修复', branch, root), KB_SESSION='an:' + sid))
     _AN[sid] = proc
     rec = {'编号': sid, '类型': '修复', 'pid': proc.pid, '状态': '运行中', '开始时间': now(), '仓库': root, '分支': branch,
-           '起点': head, 'Bug': [e['编号'] for e in part], '日志': str(logf), '引擎': eng['名称'], '发起': by}
+           '起点': head, '更新代码': up, 'Bug': [e['编号'] for e in part], '日志': str(logf), '引擎': eng['名称'], '发起': by}
     allx = _an_load()
     allx.append(rec)
     _an_save(allx)
@@ -261,7 +262,7 @@ def _fx_start(root, branch, part, by='修复队列'):
         old = data['Bug'][e['编号']].get('修复') or {}
         data['Bug'][e['编号']]['修复'] = {'状态': '修复中', '开始时间': now(), '会话': sid, '分支': branch, '仓库': root,
                                           '排队时间': old.get('排队时间', ''), '发起': old.get('发起', '')}
-        _fx_log(data['Bug'][e['编号']], f'开始修复（会话 {sid}）')
+        _fx_log(data['Bug'][e['编号']], f'开始修复（会话 {sid}；修复前更新代码：{up}）')
     zt_save(data)
 
     def wait(sid=sid, proc=proc):
@@ -351,6 +352,7 @@ def bug_svn_commit(bid, by='用户（网页）'):
                     group.append(x)
                     files |= set(xf['待提交'])
                     grew = True
+        hosts.sync(root, 'svn', strict=True)                 # 提交前先 svn update（冲突就停下）
         live = {pth for _, pth in hosts.svn_changes(root)[0]}
         bad = [pth for st, pth in hosts.svn_changes(root)[0] if st in 'C!~' and pth in files]
         if bad:

@@ -172,6 +172,90 @@ def svn_commit(loc, paths, msg):
     return m[-1] if m else head(loc, 'svn')
 
 
+# ---------------------------------------------------------------- 更新代码（开发前、推代码前、切分支前、分析代码前）
+def sync(loc, kind='', branch='', fetch_only=False, strict=False):
+    """把仓库更新到服务器上最新，返回一句结果。
+    git：fetch；当前分支有上游、工作区干净 → pull --rebase（冲突就撤销，保持原样）；有未提交改动或 fetch_only → 只 fetch。
+         branch 给了且不是当前分支 → 本地那个分支快进到远端（切过去就是最新的）。
+    svn：工作副本干净 → svn update；有改动时只在 strict（提交前，必须先合上服务器的改动）才 update，冲突就报错。
+    strict=False 时网络不通、冲突等只记在结果里，不抛错（不耽误开发 / 分析）；strict=True 时抛 KBError。"""
+    kind = kind or vcs(loc)
+
+    def fail(msg):
+        if strict:
+            raise KBError(f'{label(loc)}：{msg}')
+        return f'⚠ {msg}'
+    try:
+        if kind == 'svn':
+            ch, _ = svn_changes(loc)
+            if (ch and not strict) or fetch_only:
+                return '工作副本有未提交的改动，没有 svn update（免得冲突）' if ch else '只读：没有 svn update'
+            r = svn(loc, 'update', timeout=600)
+            if r.returncode:
+                return fail(f'svn update 失败：{(r.stderr or r.stdout).strip()[-300:]}')
+            bad = [pth for st, pth in svn_changes(loc)[0] if st == 'C']
+            if bad:
+                return fail(f'svn update 后有冲突：{"、".join(bad[:10])}，在工作副本里解决后再试')
+            return f'svn update 到 r{head(loc, "svn")}'
+        if kind != 'git':
+            return ''
+        rs = git(loc, 'remote').stdout.split()
+        remote = 'origin' if 'origin' in rs else (rs[0] if rs else '')
+        if not remote:
+            return '没有远端，跳过更新'
+        r = run(loc, f'GIT_TERMINAL_PROMPT=0 git fetch --prune {shlex.quote(remote)}', timeout=300)
+        if r.returncode:
+            return fail(f'git fetch 失败：{(r.stderr or r.stdout).strip()[-300:]}')
+        out = [f'已 fetch {remote}']
+        cur = git(loc, 'branch', '--show-current').stdout.strip()
+        if branch and branch != cur and git(loc, 'rev-parse', '--verify', '--quiet', f'refs/heads/{branch}').returncode == 0 \
+                and git(loc, 'rev-parse', '--verify', '--quiet', f'refs/remotes/{remote}/{branch}').returncode == 0:
+            f = git(loc, 'fetch', remote, f'{branch}:{branch}', timeout=300)          # 只能快进；本地有没推的提交就保持原样
+            out.append(f'{branch} 已快进到最新' if f.returncode == 0 else f'{branch} 本地有没推送的提交，没快进')
+        if not cur or fetch_only:
+            return '；'.join(out)
+        if git(loc, 'rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}').returncode:
+            return '；'.join(out + [f'{cur} 没有上游分支'])
+        behind = git(loc, 'rev-list', '--count', 'HEAD..@{u}').stdout.strip()
+        if behind in ('', '0'):
+            return '；'.join(out + [f'{cur} 已是最新'])
+        if git(loc, 'status', '--porcelain', '--untracked-files=no').stdout.strip():
+            return '；'.join(out + [fail(f'{cur} 落后 {behind} 个提交，但有未提交的改动，没有合并') if strict else
+                                    f'{cur} 落后 {behind} 个提交，有未提交的改动，只 fetch 没合并'])
+        old = git(loc, 'rev-parse', '--short', 'HEAD').stdout.strip()
+        r = run(loc, 'GIT_TERMINAL_PROMPT=0 git pull --rebase', timeout=300)
+        if r.returncode:
+            run(loc, 'git rebase --abort 2>/dev/null; true')
+            return '；'.join(out + [fail(f'{cur} git pull --rebase 冲突，已撤销保持原样：{(r.stderr or r.stdout).strip()[-300:]}')])
+        new = git(loc, 'rev-parse', '--short', 'HEAD').stdout.strip()
+        return '；'.join(out + [f'{cur} 拉取 {behind} 个提交 {old} → {new}'])
+    except KBError as e:
+        if strict:
+            raise
+        return f'⚠ 更新失败：{e}'
+
+
+def git_catch_up(loc, remote, branch):
+    """推代码前：fetch，远端分支有本地没有的提交就把本地提交 rebase 上去（冲突撤销并抛错）。→ 一句结果。"""
+    r = run(loc, f'GIT_TERMINAL_PROMPT=0 git fetch --prune {shlex.quote(remote)}', timeout=300)
+    if r.returncode:
+        raise KBError(f'推送前 git fetch 失败：{(r.stderr or r.stdout).strip()[-300:]}')
+    rb = f'refs/remotes/{remote}/{branch}'
+    if git(loc, 'rev-parse', '--verify', '--quiet', rb).returncode or \
+            git(loc, 'merge-base', '--is-ancestor', rb, f'refs/heads/{branch}').returncode == 0:
+        return '远端没有新提交'
+    n = git(loc, 'rev-list', '--count', f'refs/heads/{branch}..{rb}').stdout.strip()
+    cur = git(loc, 'branch', '--show-current').stdout.strip()
+    if cur != branch or git(loc, 'status', '--porcelain', '--untracked-files=no').stdout.strip():
+        raise KBError(f'远端 {branch} 有 {n} 个新提交，本地{"没检出这个分支" if cur != branch else "有未提交的改动"}，没法自动合并：'
+                      f'在仓库里 git pull --rebase 后再试')
+    r = git(loc, 'rebase', rb, timeout=300)
+    if r.returncode:
+        git(loc, 'rebase', '--abort')
+        raise KBError(f'远端 {branch} 有 {n} 个新提交，rebase 冲突（已撤销，代码保持原样）：在仓库里 git pull --rebase 解决冲突后再试')
+    return f'先合上远端 {n} 个新提交（rebase）'
+
+
 def probe(loc, patterns, cat=()):
     """一次调用看一组通配路径哪些存在，顺便取几个小文件的内容（认端用）。→ (存在的模式集合, {文件: 内容})。"""
     pats = ' '.join(shlex.quote(x) for x in patterns)

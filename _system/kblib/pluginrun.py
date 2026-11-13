@@ -180,6 +180,7 @@ def _run_locked(j, p, d, rp, cur, branch, remote, push):
         h = git('rev-parse', '--short', 'HEAD')
         _step(j, f'已提交 {h}「{msg}」（{len(changed)} 个文件）')
         if remote:
+            _step(j, '推送前更新：' + hosts.git_catch_up(str(rp), remote, branch))
             git('push', remote, f'HEAD:refs/heads/{branch}', timeout=300, msg='推送')
             _step(j, f'已推送到 {remote}/{branch}')
         if d:
@@ -240,6 +241,7 @@ def _run_locked_svn(j, p, d, rp, cur, branch, push):
         if gone:                                   # 插件直接删掉的文件：告诉 svn 是删除
             svn('delete', *gone, msg='svn delete 删掉的文件')
         msg = p.get('提交说明') or f'chore: {p["名称"]}'
+        _step(j, '提交前更新：' + hosts.sync(loc, 'svn', strict=True))
         ch, _ = hosts.svn_changes(loc)
         paths = [x for _, x in ch if x in changed or any(f.startswith(x.rstrip('/') + '/') for f in newf)]
         rev = hosts.svn_commit(loc, paths, msg)

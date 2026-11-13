@@ -250,6 +250,9 @@ def _start_dev(d, end):
     if not x.get('版本库'):
         x['版本库'] = hosts.vcs(root) or 'git'
     if not x.get('起点'):
+        # 开发前更新代码：只在这一端第一次开工时合并（之后各轮只 fetch，免得别人的提交混进「起点..HEAD」让审查看错）
+        up = hosts.sync(root, x['版本库'], branch=x.get('分支', ''))
+        log(d, '更新代码', f'{end} 开发前：{up}')
         x['起点'] = hosts.head(root, x['版本库'])
         if x['版本库'] == 'svn':           # 开工前工作副本里原有的改动：验收提交时不碰
             ch, new = hosts.svn_changes(root)
@@ -544,6 +547,7 @@ def _git_push_end(d, e, x):
     if not remote:
         x['已推送'] = '没有远端'
         return f'{e}（git）仓库没有远端，没推送（{n} 个提交留在本地 {b}）'
+    up = hosts.git_catch_up(root, remote, b)                 # 推代码前更新：远端有新提交先 rebase 上去
     r = hosts.run(root, f'GIT_TERMINAL_PROMPT=0 git push -u {remote} refs/heads/{b}:refs/heads/{b}', timeout=300)
     if r.returncode:
         err = (r.stderr or r.stdout).strip()[-600:]
@@ -553,8 +557,8 @@ def _git_push_end(d, e, x):
     sha = g('rev-parse', '--short', f'refs/heads/{b}').stdout.strip()
     x.update(已推送=f'{remote}/{b}@{sha}', 推送时间=now())
     dirty = g('status', '--porcelain', '--untracked-files=no').stdout.strip()
-    log(d, '各端开发', f'{e} 验收后推送 {remote}/{b}（{n} 个提交，{sha}）')
-    return f'{e}（git）已推送 {remote}/{b}，{n} 个提交' + ('；工作区还有没提交的改动，没推送' if dirty else '')
+    log(d, '各端开发', f'{e} 验收后推送 {remote}/{b}（{n} 个提交，{sha}；推送前：{up}）')
+    return f'{e}（git）已推送 {remote}/{b}，{n} 个提交' + ('（' + up + '）' if up != '远端没有新提交' else '') + ('；工作区还有没提交的改动，没推送' if dirty else '')
 
 
 def _publish_ends(d, m, plan):
@@ -576,6 +580,7 @@ def _publish_ends(d, m, plan):
         if x.get('状态') != '审查通过':
             out.append(f'{e}（svn）没通过审查，没有提交，改动留在工作副本里')
             continue
+        hosts.sync(x['仓库'], 'svn', strict=True)            # 提交前先 svn update 合上服务器的改动（冲突就停下）
         ch, new = hosts.svn_changes(x['仓库'])
         pre = set(x.get('原有改动') or [])
         bad = [pth for st, pth in ch if st in 'C!~']

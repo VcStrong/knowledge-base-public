@@ -224,6 +224,8 @@ def bug_analyze(ids, by='用户（网页）'):
             sid = datetime.now().strftime('%Y%m%d-%H%M%S-') + uuid_hex()[:4]
             (ZT_DIR / '分析会话').mkdir(parents=True, exist_ok=True)
             logf = ZT_DIR / '分析会话' / f'{sid}.jsonl'
+            busy_repo = _bug_fix._repo_busy(root)          # 分析代码前更新：有会话在改这个仓库就只 fetch，不动它的工作区
+            up = hosts.sync(root, branch=next((b for _, b, _, _ in part if b), ''), fetch_only=bool(busy_repo))
             cur = hosts.branch_of(root) if (Path(root) / '.svn').exists() and not (Path(root) / '.git').exists() \
                 else _git(Path(root), 'branch', '--show-current').stdout.strip()
             git0 = _wc_status(root)
@@ -231,7 +233,8 @@ def bug_analyze(ids, by='用户（网页）'):
                                 env_extra={'KB_SESSION': 'an:' + sid}, extra_args=_readonly_args(eng))
             _AN[sid] = proc
             rec = {'编号': sid, 'pid': proc.pid, '状态': '运行中', '开始时间': now(), '仓库': root, '分支': cur,
-                   'Bug': [x[0]['编号'] for x in part], '日志': str(logf), '引擎': eng['名称'], '发起': by, 'git前': git0}
+                   'Bug': [x[0]['编号'] for x in part], '日志': str(logf), '引擎': eng['名称'], '发起': by, 'git前': git0,
+                   '更新代码': up}
             items_all = _an_load()
             items_all.append(rec)
             _an_save(items_all)

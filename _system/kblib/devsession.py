@@ -16,6 +16,7 @@ from .flows import flow_done, flow_for, flow_text, get_flow, period_flow
 from .engines import engine_bin, engine_popen, period_engine
 from .plugins import _sources_prompt, run_plugins
 from .devprep import _dev_target, _git, _git_root, _no_flow_msg, _sdd_repo
+from . import hosts
 from . import lazy
 _talk = lazy('kblib.talk')
 _devices = lazy('kblib.devices')      # 上层模块：用到时才 import（不形成循环）
@@ -623,6 +624,9 @@ def dev_start(period, note='', repo='', branch='', keep_branch=False):
         save_meta(d, m)
         log(d, '确认开发分支', f'{root.name} · {cur}' + (f'（网页确认切换：{"；".join(steps)}）' if branch else f'（沿用当前分支；{steps[0]}）'))
     root, branch, f, docs = _dev_target(d, m, repo)
+    if not steps:                                       # 开发前更新代码（刚切过分支的已经拉过）
+        up = hosts.sync(str(root), 'git')
+        log(d, '更新代码', f'开发前：{up}')
     eng = period_engine(dict(m, 开发会话={}))
     engine_bin(eng)
     if m.get('状态') not in DEV_OK:
