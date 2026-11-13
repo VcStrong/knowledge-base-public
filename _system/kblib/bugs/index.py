@@ -37,7 +37,7 @@ ZT_MD = ZT_DIR / 'Bug索引.md'
 ZT_OWNER = ('期', '事项', '待归纳', '未关联')
 ZT_SCOPES = ['我的', '全部', '指定人']
 ZT_HOURS = float(os.environ.get('KB_BUG_HOURS') or os.environ.get('KB_ZENTAO_HOURS') or '0.25')   # 默认 15 分钟一次，转给别人的 Bug 能及时移除
-ZT_LOCAL = ('归属', '分析', '修复')      # 知识库自己的字段：从平台刷新索引时要保留
+ZT_LOCAL = ('归属', '分析', '修复', '忽略')      # 知识库自己的字段：从平台刷新索引时要保留
 ZT_FIRST_DAYS = 30            # 第一次同步：未关闭的全部 + 最近 30 天改过的
 _ZT_LOCK = threading.Lock()
 ZT_STATE = {'running': False, 'last': '', 'result': '', 'next': ''}
@@ -481,6 +481,28 @@ def bug_list(iteration='', owner='', status='未关闭', query='', limit=50):
     return head + '\n' + '\n'.join(_zt_line(e, detail=bool(iteration)) for e in es[:limit]) + \
         (f'\n……还有 {len(es) - limit} 条' if len(es) > limit else '') + \
         '\n\n知识库只存简介；处理前用 kb_bug_get 从平台实时拉取正文、评论和截图。'
+
+
+def bug_ignore(ids, on=True, note='', by='用户（网页）'):
+    """只在知识库里标「忽略」（陈旧、不打算处理的 Bug），不改 Bug 平台：不算没解决、管家不分析、列表默认收起。on=False 取消。"""
+    ids = [str(i).strip() for i in (ids if isinstance(ids, (list, tuple)) else [ids]) if str(i).strip()]
+    if not ids:
+        raise KBError('没有要忽略的 Bug')
+    data = zt_load()
+    done = []
+    for bid in ids:
+        e = data['Bug'].get(bid)
+        if not e:
+            continue
+        if on:
+            e['忽略'] = {'时间': now(), '人': by, '说明': (note or '').strip()}
+        else:
+            e.pop('忽略', None)
+        done.append(bid)
+    if not done:
+        raise KBError('索引里没有这些 Bug')
+    zt_save(data)
+    return f'已{"忽略" if on else "取消忽略"} {len(done)} 个 Bug（只在知识库标记，不改 Bug 平台）' + ('；以后不算「没解决」，管家也不会分析' if on else '')
 
 
 def bug_assign(bid, target, by='Claude', bind=True):

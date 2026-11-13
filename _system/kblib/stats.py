@@ -74,6 +74,8 @@ def stats_facts():
                          '待确认': sum(1 for q in m.get('待确认') or [] if q.get('状态') == '待回答')})
     try:
         for e in zt_load()['Bug'].values():
+            if e.get('忽略'):          # 你标了忽略的陈旧 Bug 不算
+                continue
             f = e.get('修复') or {}
             out['Bug'].append({'编号': e.get('编号', ''), '平台状态': e.get('状态', ''), '期': (e.get('归属') or {}).get('名称', ''),
                                '修复状态': f.get('状态', ''), '修复时间': f.get('时间', ''),

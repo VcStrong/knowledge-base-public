@@ -56,6 +56,20 @@ def zentao_auto():
         time.sleep(kb.ZT_HOURS * 3600)
 
 
+STEWARD_MIN = float(os.environ.get('KB_STEWARD_MINUTES', '5'))
+
+
+def steward_auto():
+    """管家：每 KB_STEWARD_MINUTES 分钟（默认 5）巡检一轮，明确的事自己做。设置里关掉管家时只看不做。"""
+    time.sleep(180)
+    while True:
+        try:
+            kb.steward_tick()
+        except Exception as e:
+            print('steward:', repr(e), flush=True)
+        time.sleep(STEWARD_MIN * 60)
+
+
 def api_zentao(period='', owner=''):
     bugs = kb.zentao_bugs_json(period, owner)
     names = kb.period_names()
@@ -137,7 +151,7 @@ def api_overview():
                         'plugins': sorted({x.get('插件') for x in m.get('外部来源') or []}),
                         'srcTitles': [x.get('标题') or x.get('编号') for x in m.get('外部来源') or []]})
     try:
-        zb = [e for e in kb.zt_load()['Bug'].values() if e['状态'] != '已关闭']
+        zb = [e for e in kb.zt_load()['Bug'].values() if e['状态'] != '已关闭' and not e.get('忽略')]
     except Exception:
         zb = []
     open_by = {}                     # 每期没解决的 Bug：平台上还是激活、知识库也没标已修复
@@ -464,6 +478,8 @@ class H(BaseHTTPRequestHandler):
             return self._events()
         if u.path == '/api/overview':
             return self._guard(api_overview)
+        if u.path == '/api/steward':
+            return self._guard(kb.steward_view)
         if u.path == '/api/stats':
             return self._guard(lambda: kb.work_stats(q.get('range', '')))
         if u.path == '/api/period':
@@ -637,7 +653,7 @@ class H(BaseHTTPRequestHandler):
                       '/api/period/engine', '/api/retest', '/api/retest/plan', '/api/issue', '/api/device', '/api/dev/chat',
                       '/api/plugin', '/api/plugin/dir', '/api/plugin/remove', '/api/plugin/run', '/api/plugin/run2', '/api/plugin/task', '/api/task/push', '/api/task/item', '/api/task/nav', '/api/anr/batch', '/api/stack/end', '/api/stack/plan', '/api/stack/approve', '/api/stack/dev', '/api/stack/stop', '/api/stack/change', '/api/stack/reject', '/api/stack/accept', '/api/period/delete', '/api/period/say',
                       '/api/zentao/settings', '/api/bug/source', '/api/bug/test', '/api/zentao/analyze', '/api/zentao/review', '/api/zentao/fix',
-                      '/api/zentao/fixed', '/api/zentao/unfix', '/api/anr/create', '/api/anr/mapping-url', '/api/period/builds', '/api/build/mapping', '/api/anr/automap') and not self._from_page():
+                      '/api/zentao/fixed', '/api/zentao/unfix', '/api/zentao/ignore', '/api/steward/settings', '/api/steward/answer', '/api/steward/dismiss', '/api/steward/tick', '/api/anr/create', '/api/anr/mapping-url', '/api/period/builds', '/api/build/mapping', '/api/anr/automap') and not self._from_page():
             return self._send(403, {'error': '只能在知识库网页上由本人操作'})
         if u.path == '/api/base/save':
             return self._guard(lambda: {'msg': kb.base_save(body.get('id', ''), body.get('category', ''), body.get('name'),
@@ -822,6 +838,8 @@ class H(BaseHTTPRequestHandler):
             return self._guard(lambda: {'msg': kb.bug_unfix(str(body.get('id', '')))})
         if u.path == '/api/zentao/review':
             return self._guard(lambda: {'msg': kb.bug_review(str(body.get('id', '')), body.get('action', ''), body.get('note', ''))})
+        if u.path == '/api/zentao/ignore':
+            return self._guard(lambda: {'msg': kb.bug_ignore(body.get('ids') or [], body.get('on', True) is not False, body.get('note', ''))})
         if u.path == '/api/zentao/assign':
             return self._guard(lambda: {'msg': kb.bug_assign(str(body.get('id', '')), body.get('target', ''), by='用户（网页）',
                                                              bind=body.get('bind', True) is not False)})
@@ -872,6 +890,14 @@ class H(BaseHTTPRequestHandler):
             return self._guard(run)
         if u.path == '/api/anr/delete':
             return self._guard(lambda: {'msg': kb.anr_delete_sample(body.get('sample', ''))})
+        if u.path == '/api/steward/settings':
+            return self._guard(lambda: {'msg': kb.steward_set(body.get('on'), body.get('level'), body.get('limit'), body.get('actions'), body.get('new_days'))})
+        if u.path == '/api/steward/dismiss':
+            return self._guard(lambda: {'msg': kb.steward_dismiss(body.get('id', ''))})
+        if u.path == '/api/steward/answer':
+            return self._guard(lambda: {'msg': kb.steward_answer(body.get('id', ''), body.get('value', ''))})
+        if u.path == '/api/steward/tick':
+            return self._guard(lambda: {'msg': kb.steward_tick('用户（网页）')})
         if u.path == '/api/reindex':
             return self._guard(lambda: {'msg': kb.reindex(body.get('target', 'all'))})
         self._send(404, {'error': 'not found'})
@@ -910,6 +936,8 @@ def main(port=11555, host=''):
     if kb.ZT_HOURS > 0:
         kb.ZT_STATE['next'] = time.strftime('%Y-%m-%d %H:%M', time.localtime(time.time() + 120))
         threading.Thread(target=zentao_auto, daemon=True).start()
+    if STEWARD_MIN > 0:
+        threading.Thread(target=steward_auto, daemon=True).start()
     if REFRESH_HOURS > 0:
         AUTO['next'] = time.strftime('%Y-%m-%d %H:%M', time.localtime(time.time() + 300))
         threading.Thread(target=auto_refresh, daemon=True).start()

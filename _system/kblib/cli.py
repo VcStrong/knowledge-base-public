@@ -32,6 +32,7 @@ from .bugs.fix import bug_fixed
 from .anr.store import anr_add, anr_link, anr_list, anr_mapping, anr_set_version, anr_show
 from .mcp import serve
 from .stats import stats_facts, stats_text
+from .steward import steward_text, steward_tick
 
 
 def approve(name):
@@ -123,6 +124,8 @@ def main(argv=None):
     x = sp.add_parser('stats', help='工作统计（统计插件算）：kb stats [今天|本周|本月|近7天|近30天|全部]；--facts 输出给插件的原始事实 JSON')
     x.add_argument('range', nargs='?', default='')
     x.add_argument('--facts', action='store_true')
+    x = sp.add_parser('steward', help='管家：kb steward 看待你处理的事和管家做了什么；kb steward tick 立即巡检一轮（明确的事会自动做）')
+    x.add_argument('action', nargs='?', default='view', choices=['view', 'tick'])
     x = sp.add_parser('task', help='新建事项（不是产品需求的工作）：kb task <名称> [说明] [-k 类型] [-f 来源] [-p 高|中|低] [--bug 编号…]')
     x.add_argument('name')
     x.add_argument('summary', nargs='?', default='')
@@ -273,6 +276,8 @@ def main(argv=None):
             else:
                 save_zentao_settings(platform=g(0), source=a.source)
                 r = f'已改平台：{g(0)}'
+        elif a.cmd == 'steward':
+            r = steward_tick('终端') if a.action == 'tick' else steward_text()
         elif a.cmd == 'stats':
             r = json.dumps(stats_facts(), ensure_ascii=False) if a.facts else stats_text(a.range)
         elif a.cmd == 'plugin':

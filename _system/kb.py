@@ -45,6 +45,7 @@ _MODULES = [
     'stack',
     'stackdev',
     'stats',
+    'steward',
     'deploy',
     'mcp',
     'cli',

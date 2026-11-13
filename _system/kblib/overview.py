@@ -83,7 +83,7 @@ def _period_bugs_md(name):
         return ''
     if not es:
         return ''
-    op = [e for e in es if e['状态'] != '已关闭']
+    op = [e for e in es if e['状态'] != '已关闭' and not e.get('忽略')]
     out = [f'\n## Bug（未关闭 {len(op)} / 共 {len(es)}；只是索引，处理前用 kb_bug_get 实时拉取）']
     out += [f'- Bug {e["编号"]} ［{e["状态"]}·严重{e["严重"]}］{e["标题"]}　{e["链接"]}' + (f'\n  {e["简介"]}' if e.get('简介') else '')
             for e in sorted(op, key=lambda e: (e['状态'] != '激活', e['严重'], e['编号']))]

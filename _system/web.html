@@ -207,6 +207,15 @@ button.danger{border-color:var(--warn);color:var(--warn)}
 .kpi{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--c);border-radius:10px;padding:12px 16px;box-shadow:var(--shadow);display:flex;justify-content:space-between;align-items:center;gap:8px;color:var(--fg)}
 .kpi .k{font-size:12px;letter-spacing:.04em;color:var(--c);font-weight:700}
 .kpi .v{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.3}
+.stw{margin-bottom:18px}.stw .sh{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:10px}.stw .sh h2{margin:0}.stw .sh .src{margin-left:auto}
+.stw .brief{background:var(--s2b);border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:13px}
+.stcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+.stc{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--s0);border-radius:10px;padding:10px 14px;box-shadow:var(--shadow);min-width:0;display:flex;flex-direction:column;gap:4px}
+.stc.t-问你{border-left-color:var(--s1)}.stc.t-待你{border-left-color:var(--s2)}.stc.t-建议{border-left-color:var(--s3)}
+.stc .tt{font-weight:600}.stc .ds{font-size:13px;overflow-wrap:anywhere}.stc .wy{font-size:12px;color:var(--mut)}
+.stc .ac{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:auto;padding-top:6px}.stc .ac select{max-width:100%;min-width:0;flex:1}
+.stc .ac .no{margin-left:auto;font-size:12px;color:var(--mut);cursor:pointer}
+.stw details{margin-top:10px;font-size:13px}.stw details li{margin:2px 0}
 .wstat{margin-bottom:18px}.wstat .sh{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:10px}.wstat .sh h2{margin:0}
 .wstat .sh .fchip{padding:2px 10px;font-size:12px}.wstat .sh .src{margin-left:auto}
 .scards{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}
@@ -319,7 +328,7 @@ const badge=s=>`<span class="badge st-${esc(s)}">${esc(s)}</span>`;
 const fileUrl=p=>'/file?path='+enc(p);
 
 let entries=[],ovPeriods=[];
-let ovStats=null,ovRange='';try{ovRange=localStorage.getItem('kb.statRange')||''}catch(_){}
+let ovStw=null,ovStats=null,ovRange='';try{ovRange=localStorage.getItem('kb.statRange')||''}catch(_){}
 let ovFilter='全部';try{ovFilter=localStorage.getItem('kb.ovFilter')||'全部'}catch(_){}
 const DOT={收集中:'var(--s0)',已批准开发:'var(--info)',开发中:'var(--s2)',已完成:'var(--s3)',已暂停:'var(--s1)'};
 // 左侧导航：期列表（状态色点 + 待确认 / 问题数）、手机空闲数、当前页高亮
@@ -394,6 +403,7 @@ async function overview(){
     <div class="kpi" style="--c:var(--s4)"><div><div class="k">需要你处理的问题</div><div class="v">${sum('issues')}</div></div><span class="mut small">手机、账号、环境等</span></div>
     <a class="kpi" href="#/phones" style="--c:var(--s3)"><div><div class="k">空闲手机</div><div class="v">${ph?ph.free+' / '+ph.total:'—'}</div></div><span class="mut small">${ph?'多个期共用':'本机找不到 adb'}</span></a>
   </section>
+  <section class="stw" id="ovStw">${stwHtml(ovStw)}</section>
   <section class="wstat" id="ovStats">${statsHtml(ovStats)}</section>
   <div class="fchips">${['全部',...ORDER].map(s=>`<button class="fchip ${s===ovFilter?'on':''}" data-f="${s}">${s}<b>${cnt(s)}</b></button>`).join('')}</div>
   <section class="pgrid">${list.map(card).join('')||'<p class="mut">这个状态下还没有期。</p>'}</section>
@@ -407,12 +417,39 @@ async function overview(){
   ${d.repos.length?`<div class="tw"><table><tr><th>名称</th><th>路径</th><th>已索引文件</th><th>登记时间</th></tr>${d.repos.map(r=>`<tr><td>${esc(r.name)}</td><td class="small mono">${esc(r.path)}</td><td>${r.files}</td><td class="small">${esc(r.added)}</td></tr>`).join('')}</table></div>`:'<p class="mut">还没有登记。终端运行 <code>kb repo &lt;代码路径&gt;</code>，或让 Claude 登记。</p>'}
   <p class="mut small">知识库目录：${esc(d.root)}　·　<a href="#/d/使用说明">使用说明</a></p>`;
   app.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{ovFilter=b.dataset.f;try{localStorage.setItem('kb.ovFilter',ovFilter)}catch(_){}overview()});
-  loadStats();
+  loadStats();loadStw();
   if($('#ovAdd'))$('#ovAdd').onclick=()=>addDlg();
   $('#ovTask').onclick=()=>addDlg('task');
   app.querySelectorAll('[data-tnav]').forEach(a=>a.onclick=()=>taskNav(a.dataset.tnav,!!a.dataset.show));
   app.querySelectorAll('[data-pnav]').forEach(a=>a.onclick=e=>{e.preventDefault();e.stopPropagation();taskNav(a.dataset.pnav,!!a.dataset.show)});
   const g=$('#ibGo');if(g)g.onclick=async()=>{try{const r=await post('/api/inbox',{period:$('#ibP').value});toast(r.msg);render()}catch(e){toast(e.message)}};
+}
+
+// 管家：明确的事自己做（只读 / 能重做的），要你批准的出卡片，不明确的只问一个问题
+const STW_TAG={问你:'❓ 问你',待你:'👉 待你处理',建议:'💡 建议'};
+const STW_ACT={'Bug分析':'Bug 只读分析','来源整理':'需求资料重新整理'};
+function stwHtml(v){
+  if(!v)return '';
+  const s=v['设置'],cs=v['卡片']||[],did=v['已做']||[];
+  const head=`<div class="sh"><h2>🤖 管家</h2><span class="mut small">${s['开启']?`自主度「${esc(s['自主度'])}」 · 今天自动做了 ${v['今日已做']}/${s['每日上限']} 件`:'已关闭：只看不做'}${v['上次']?` · 上次巡检 ${esc(v['上次'].slice(11))}`:''}</span>
+    <button class="small" id="stwTick" title="现在就巡检一轮：明确的事会自动做">立即巡检</button><a class="small src" href="#/settings">管家设置</a></div>`;
+  const card=c=>`<div class="stc t-${esc(c['类型'])}"><span class="small mut">${STW_TAG[c['类型']]||esc(c['类型'])}</span><div class="tt">${esc(c['标题'])}</div>
+    ${c['说明']?`<div class="ds">${esc(c['说明'])}</div>`:''}${c['为什么']?`<div class="wy">${esc(c['为什么'])}</div>`:''}
+    <div class="ac">${c['选项']?`<select data-sopt="${esc(c.id)}">${c['选项'].map(o=>`<option value="${esc(o['值'])}">${esc(o['标签'])}</option>`).join('')}</select><button class="pri" data-sans="${esc(c.id)}">就用这个</button>`
+      :(c['动作']==='run'||c['动作']==='ignore')?`<button class="pri" data-sans="${esc(c.id)}">${esc(c['按钮']||'现在就做')}</button>${c['链接']?`<a class="small" href="${esc(c['链接'])}">看看</a>`:''}`
+      :c['链接']?`<a class="btn" href="${esc(c['链接'])}"><button class="pri">${esc(c['按钮']||'去处理')}</button></a>`:''}
+      <span class="no" data-sno="${esc(c.id)}" title="这件事先不提；情况有变化会再出现">不用了</span></div></div>`;
+  return head+(v['日报']?`<div class="brief">📰 今日日报：${esc(v['日报']['内容'])}</div>`:'')
+    +(cs.length?`<div class="stcards">${cs.map(card).join('')}</div>`:'<p class="mut small" style="margin:0">✓ 现在没有要你处理的事。</p>')
+    +(did.length?`<details><summary>管家最近自动做了 ${did.length} 件</summary><ul>${did.map(r=>`<li><span class="mut">${esc(r['时间'].slice(5))}</span> ${esc(STW_ACT[r['动作']]||r['动作'])}：${esc([].concat(r['对象']).join('、'))} · ${esc(r['结果'])}</li>`).join('')}</ul></details>`:'');
+}
+async function loadStw(){
+  try{ovStw=await api('/api/steward')}catch(e){ovStw=null}
+  const el=$('#ovStw');if(!el)return;el.innerHTML=stwHtml(ovStw);
+  const go=async(u,b)=>{try{toast((await post(u,b)).msg)}catch(e){toast(e.message)}loadStw()};
+  const t=$('#stwTick');if(t)t.onclick=()=>{t.disabled=true;t.textContent='巡检中…';go('/api/steward/tick',{})};
+  el.querySelectorAll('[data-sans]').forEach(b=>b.onclick=()=>{if(/忽略/.test(b.textContent)&&!confirm('忽略这些陈旧 Bug？只在知识库标记，不改 Bug 平台，随时能在 Bug 页取消。'))return;const s=el.querySelector(`[data-sopt="${CSS.escape(b.dataset.sans)}"]`);b.disabled=true;go('/api/steward/answer',{id:b.dataset.sans,value:s?s.value:''})});
+  el.querySelectorAll('[data-sno]').forEach(b=>b.onclick=()=>go('/api/steward/dismiss',{id:b.dataset.sno}));
 }
 
 // 工作统计：数由「统计」插件算（⚙ 设置 → 插件 挂载「工作统计」）；没挂就不显示
@@ -496,9 +533,11 @@ Object.keys(BUG_SORTS).forEach(k=>{const f=BUG_SORTS[k];BUG_SORTS[k]=(a,b)=>bugD
 const AN_ST={待审核:'st-已批准开发',已通过:'st-已完成',需重分析:'st-已暂停2',无需审核:'st-已完成'};
 function anRank(b){const a=b['分析'],f=b['修复'];return f?(f['状态']==='已修复'?6:1):b['分析中']?2:!a?4:a['过时']?3:a['状态']==='需重分析'||a['状态']==='待审核'?0:a['状态']==='已通过'?1:5}
 function anCell(b){const a=b['分析'],done=(b['修复']||{})['状态']==='已修复';
+  if(b['忽略'])return `<span class="badge" title="${esc((b['忽略']['时间']||'')+' '+(b['忽略']['说明']||''))}">已忽略</span> <a class="small" data-bign="${esc(b['编号'])}" data-on="">取消忽略</a>`;
+  const ign=b['状态']==='激活'&&!b['修复']?` <a class="small mut" data-bign="${esc(b['编号'])}" data-on="1" title="陈旧、不打算处理：只在知识库标记，不改 Bug 平台；不再算没解决，管家也不分析">忽略</a>`:'';
   if(b['分析中'])return '<span class="badge st-开发中">● 分析中</span>';
   const btn=`<button class="small" data-ban="${esc(b['编号'])}" title="后台只读分析：实时拉取 Bug，对照本期分支改动和代码，给出代码位置和修复思路">${a?'重新分析':'🔍 分析'}</button>`;
-  if(!a)return b['状态']==='已关闭'?'':btn;
+  if(!a)return b['状态']==='已关闭'?'':btn+ign;
   return `<a data-bav="${esc(b['编号'])}" title="${esc(a['摘要']||'')}"><span class="badge ${AN_ST[a['状态']]||''}">${esc(a['状态'])}</span>${a['过时']&&!done&&a['状态']!=='无需审核'?' <span class="badge st-已暂停2" title="分析之后平台上又改过">可能过时</span>':''} <span class="small mut">置信度${esc(a['置信度']||'?')}</span>
     <div class="small" style="margin-top:2px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a['摘要']||'')}</div></a>${(a['过时']||a['状态']==='需重分析')&&!done&&a['状态']!=='无需审核'?'<div style="margin-top:3px">'+btn+'</div>':''}`}
 function fixCell(b){const f=b['修复'],a=b['分析'];
@@ -548,25 +587,31 @@ let bugIndex={};
 // Bug 列表默认只显示 编号、标题、状态、分析 / 修复；其他信息勾选后显示（记在本机浏览器）
 const BUG_COLS=[['简介','简介'],['详情','产品 / 执行·Sprint / 指派 / Jenkins'],['严重','严重 / 平台 / 线上'],['归属','归属（可改）']];
 let bugCols=[];try{bugCols=JSON.parse(localStorage.getItem('kb.bugCols')||'[]')}catch(_){}
+let bugShowIgn=false;
 function bugTable(bugs,ps,st){
   bugs.forEach(b=>bugIndex[b['编号']]=b);
-  const list=bugs.filter(b=>st==='全部'||b['状态']!=='已关闭').sort(BUG_SORTS[bugSort]||BUG_SORTS['状态']);
-  if(!list.length)return `<p class="mut">${bugs.length?'没有未关闭的 Bug。':'还没有 Bug。'}</p>`;
-  const todo=list.filter(b=>!b['分析']&&!b['分析中']&&b['状态']==='激活').map(b=>b['编号']);   // 只批量分析激活的
+  const nIgn=bugs.filter(b=>b['忽略']&&(st==='全部'||b['状态']!=='已关闭')).length;
+  const list=bugs.filter(b=>(st==='全部'||b['状态']!=='已关闭')&&(bugShowIgn||!b['忽略'])).sort(BUG_SORTS[bugSort]||BUG_SORTS['状态']);
+  const old30=new Date(Date.now()-30*864e5).toISOString().slice(0,10);
+  const stale=list.filter(b=>!b['忽略']&&b['状态']==='激活'&&!b['分析']&&!b['修复']&&!b['分析中']&&(b['修改时间']||'9')<old30).map(b=>b['编号']);
+  const ignBar=nIgn?`<p class="small mut"><a data-bshowign>${bugShowIgn?'收起':'显示'}已忽略的 ${nIgn} 个 Bug</a></p>`:'';
+  if(!list.length)return `<p class="mut">${bugs.length?'没有未关闭的 Bug。':'还没有 Bug。'}</p>`+ignBar;
+  const todo=list.filter(b=>!b['分析']&&!b['分析中']&&!b['忽略']&&b['状态']==='激活').map(b=>b['编号']);   // 只批量分析激活的
   const fixable=list.filter(b=>b['分析']&&b['分析']['状态']==='已通过'&&!b['分析']['过时']&&!b['修复']&&b['状态']!=='已关闭').map(b=>b['编号']);
   const th=(k,t,w)=>`<th${w?` style="width:${w}px"`:''}><a data-bsort="${k}" title="按${k}排序">${t}${bugSort===k?' ▾':''}</a></th>`;
   const on=k=>bugCols.includes(k),multi=new Set(bugs.map(b=>b['来源'])).size>1;
   return `<div class="row small mut" style="margin-bottom:6px;gap:10px;flex-wrap:wrap">排序 ${Object.keys(BUG_SORTS).map(k=>`<a data-bsort="${k}" ${bugSort===k?'style="font-weight:600;color:var(--fg)"':''}>${k}</a>`).join(' · ')}
     <span style="margin-left:12px">显示</span>${BUG_COLS.map(([k,t])=>`<label class="row" style="gap:3px;color:var(--fg)"><input type="checkbox" data-bcol="${k}" ${on(k)?'checked':''}>${t}</label>`).join('')}
     <span style="margin-left:auto"></span>${todo.length?`<button class="small" data-banall="${esc(todo.join(','))}">🔍 分析未分析的激活 Bug（${todo.length}）</button>`:''}
-    ${fixable.length?`<button class="small" data-bfixall="${esc(fixable.join(','))}">🔧 修复审核通过的（${fixable.length}）</button>`:''}</div>
+    ${fixable.length?`<button class="small" data-bfixall="${esc(fixable.join(','))}">🔧 修复审核通过的（${fixable.length}）</button>`:''}
+    ${stale.length?`<button class="small" data-bignall="${esc(stale.join(','))}" title="平台上 30 天没动、也没分析过的激活 Bug：只在知识库标忽略，不改 Bug 平台">🙈 忽略 30 天没动的（${stale.length}）</button>`:''}</div>
   <div class="tw"><table><tr><th>Bug</th>${th('状态','状态',on('严重')?120:80)}${th('分析','分析 / 修复',240)}${on('归属')?'<th style="width:230px">归属</th>':''}</tr>${list.map(b=>`<tr>
     <td><a href="${esc(b['链接'])}" target="_blank" rel="noopener" class="mono small" title="在${esc(b['来源']||'平台')}打开原页">${esc(b['编号'])}</a>${multi?` <span class="badge" style="font-size:11px">${esc(b['来源']||'')}</span>`:''} <b>${esc(b['标题'])}</b>${on('简介')&&b['简介']?`<div class="small">${esc(b['简介'])}</div>`:''}
       ${on('详情')?`<div class="mut small">${esc(b['产品']||'')}${(b['分组']||[]).filter(g=>g['名']).map(g=>' · '+esc(g['类型']+' '+g['名'])).join('')}${b['指派给']?' · 指派 '+esc(b['指派给']):''} · 平台上修改 ${esc(b['修改时间']||'')}${b['Jenkins任务']?` · <span class="mono" title="Jenkins 任务">${esc(b['Jenkins任务'])}</span>`:''}</div>`:''}
       ${!on('归属')&&b['归属']&&b['归属']['类型']!=='待归纳'&&b['归属']['名称']&&!curPeriod()?`<div class="mut small">→ ${esc(b['归属']['名称'])}</div>`:''}</td>
     <td><span class="badge ${BUG_ST[b['状态']]||''}">${esc(b['状态'])}</span>${on('严重')?` <span class="small mut">严重${esc(b['严重'])}</span>${b['线上']?' <span class="badge st-已暂停2">线上</span>':''}${b['平台']?` <span class="small mut">${esc(b['平台'])}</span>`:''}`:''}</td>
     <td>${anCell(b)}${fixCell(b)}</td>
-    ${on('归属')?`<td>${ownerSel(b,ps)}</td>`:''}</tr>`).join('')}</table></div>`}
+    ${on('归属')?`<td>${ownerSel(b,ps)}</td>`:''}</tr>`).join('')}</table></div>${ignBar}`}
 async function analyze(ids,repo){
   try{const r=await post('/api/zentao/analyze',repo?{ids,repo}:{ids});toast(r.msg.split('\n')[0]);render()}
   catch(e){if(!e.need)return toast(e.message);const n=e.need;
@@ -623,7 +668,11 @@ async function analysisDlg(id){
   $('#rvRe').onclick=async()=>{const note=$('#rvN').value.trim();if(!note){toast('打回要写意见：哪里不对、希望往哪个方向查');$('#rvN').focus();return}
     try{const m=await post('/api/zentao/review',{id,action:'打回',note});toast(m.msg);dlg.close();analyze([id])}catch(e){toast(e.message)}};
 }
+async function ignoreBugs(ids,on){try{toast((await post('/api/zentao/ignore',{ids,on})).msg);render()}catch(e){toast(e.message)}}
 function bindBugs(root){
+  root.querySelectorAll('[data-bign]').forEach(a=>a.onclick=e=>{e.preventDefault();ignoreBugs([a.dataset.bign],!!a.dataset.on)});
+  root.querySelectorAll('[data-bignall]').forEach(b=>b.onclick=()=>{const ids=b.dataset.bignall.split(',');if(confirm(`忽略这 ${ids.length} 个陈旧 Bug？只在知识库标记，不改 Bug 平台，随时能取消。`))ignoreBugs(ids,true)});
+  root.querySelectorAll('[data-bshowign]').forEach(a=>a.onclick=()=>{bugShowIgn=!bugShowIgn;render()});
   root.querySelectorAll('[data-bsort]').forEach(a=>a.onclick=()=>{bugSort=a.dataset.bsort;try{localStorage.setItem('kb.bugSort',bugSort)}catch(_){}render()});
   root.querySelectorAll('[data-ban]').forEach(b=>b.onclick=()=>analyze([b.dataset.ban]));
   root.querySelectorAll('[data-banall]').forEach(b=>b.onclick=()=>{const ids=b.dataset.banall.split(',');if(ids.length>6&&!confirm(`分析 ${ids.length} 条会启动多个后台会话，确定？`))return;analyze(ids)});
@@ -1809,7 +1858,19 @@ async function settingsPage(){
       ${st(e)['已安装']&&st(e)['已接入']!==true?(e['接入命令']?`<button class="pri" data-eln="${esc(e.id)}">接入知识库</button>`:e['接入说明']?`<button data-ehp="${esc(e.id)}">怎么接入</button>`:''):''}
       ${st(e)['已安装']?`<button data-ets="${esc(e.id)}" title="让它调用一次 kb_overview，验证能运行、能用知识库工具（约半分钟）">测试</button>`:''}
       ${e['内置']?(e['已修改']?`<button data-erm="${esc(e.id)}">恢复默认</button>`:''):`<button class="danger" data-erm="${esc(e.id)}">删除</button>`}</div></div>`;
+  let sw=null;try{sw=await api('/api/steward')}catch(_){}
+  const sws=sw?sw['设置']:null;
   app.innerHTML=`<h1>⚙ 设置</h1>
+    ${sw?`<h2>🤖 管家</h2>
+    <p class="mut">管家每 5 分钟巡检一次：<b>明确又能重做的事自己做</b>（下面勾选的）；<b>你点了就等于批准的</b>（拍板、开工、验收、推动、修复、svn 提交）只提醒你，从不代点；<b>拿不准的</b>只问你一个问题。每天早上 8 点后出一份日报。</p>
+    <div class="bcard"><div class="row" style="gap:16px;flex-wrap:wrap">
+      <label><input type="checkbox" id="swOn" ${sws['开启']?'checked':''}> 开启管家</label>
+      <span>自主度 ${sw['自主度选项'].map(l=>`<label style="margin-right:8px"><input type="radio" name="swLv" value="${esc(l)}" ${l===sws['自主度']?'checked':''}> ${esc(l)}</label>`).join('')}</span>
+      <label>每天最多自动做 <input type="number" id="swLim" min="0" max="200" value="${sws['每日上限']}" style="width:70px"> 件</label>
+      <label title="更早的老 Bug 不自动分析（省 token）；你打回的照样重新分析">只自动分析最近 <input type="number" id="swNd" min="1" max="60" value="${sws['新Bug天数']}" style="width:60px"> 天新建的 Bug</label></div>
+      <div class="small mut" style="margin:6px 0">保守 = 只建议、都等你点「现在就做」；标准 = 勾选的动作自动做；放手 = 同标准（以后会把更多动作放进来）。</div>
+      ${sw['动作'].map(a=>`<div style="margin:4px 0"><label><input type="checkbox" data-swa="${esc(a.id)}" ${a['开启']?'checked':''}> <b>${esc(a['名称'])}</b></label> <span class="small mut">${esc(a['说明'])}</span></div>`).join('')}
+      <div class="row" style="margin-top:8px"><button class="pri" id="swSave">保存</button></div></div>`:''}
     <div class="row" style="justify-content:space-between"><h2>AI 引擎</h2><button id="enNew">＋ 新建引擎</button></div>
     <p class="mut">后台干活用哪个编程 AI：开始开发、模糊添加、来源更新、生成流程。开发面板可以给每一期单独选，其余用默认引擎。
     引擎要<b>能无人值守运行</b>并<b>接入知识库</b>（用 kb_ask 等工具在网页上找你确认）。权限相关的启动参数决定 AI 能在仓库里做什么，内置预设只用常规权限模式，请按团队安全要求调整。</p>
@@ -1832,6 +1893,8 @@ async function settingsPage(){
     把插件文件夹（含 <code>plugin.json</code>）放进 <code>${esc(d.pluginDir.replace(/^\/Users\/[^/]+/,'~'))}</code>，或添加其他目录；运行失败会记成「需要你处理的问题」，不会拦住开发。详见 <a href="#/d/使用说明">使用说明</a>。</p>
     <div class="bgrid">${d.plugins.map(pcard).join('')||'<div class="mut">还没有插件</div>'}</div>`;
   const byId=id=>d.flows.find(f=>f.id===id),eById=id=>d.engines.find(e=>e.id===id),pById=id=>d.plugins.find(p=>p.id===id);
+  if($('#swSave'))$('#swSave').onclick=async()=>{const acts={};app.querySelectorAll('[data-swa]').forEach(x=>acts[x.dataset.swa]=x.checked);
+    try{toast((await post('/api/steward/settings',{on:$('#swOn').checked,level:(app.querySelector('[name=swLv]:checked')||{}).value,limit:$('#swLim').value,new_days:$('#swNd').value,actions:acts})).msg)}catch(e){toast(e.message)}};
   const plSave=async(p,enabled,events,config)=>{try{toast((await post('/api/plugin',{id:p.id,enabled,events,config})).msg);render()}catch(e){toast(e.message)}};
   app.querySelectorAll('[data-pmount]').forEach(b=>b.onclick=()=>{const p=pById(b.dataset.pmount);
     if(p['启用'])return plSave(p,false,p['时机'],p['配置']);plDlg(d,p,true)});
