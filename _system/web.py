@@ -108,6 +108,15 @@ def _log_lines(d):
     return out
 
 
+def _try(fn, *a):
+    """辅助信息算不出来就不显示，不影响整页。"""
+    try:
+        return fn(*a)
+    except Exception as e:
+        print('辅助信息出错：', fn.__name__, repr(e), flush=True)
+        return None
+
+
 def _safe(fn, *a):
     try:
         fn(*a)
@@ -332,7 +341,7 @@ def api_period(name):
             'notes': {c: [{**n, '显示标题': kb.note_title(n)} for n in kb.notes_of(d, c, m)] for c in kb.CATS},
             'noteKinds': kb.NOTE_KINDS,
             'log': _log_lines(d), 'cats': kb.CATS, 'statuses': kb.STATUSES, 'autoRefresh': AUTO,
-            'bugs': kb.zentao_bugs_json(d.name), 'fixq': kb.fix_queue(), 'taskKinds': kb.TASK_KINDS, 'taskPri': kb.TASK_PRI}
+            'guide': _try(kb.period_guide, d.name), 'bugs': kb.zentao_bugs_json(d.name), 'fixq': kb.fix_queue(), 'taskKinds': kb.TASK_KINDS, 'taskPri': kb.TASK_PRI}
 
 
 def api_base():
@@ -478,6 +487,12 @@ class H(BaseHTTPRequestHandler):
             return self._events()
         if u.path == '/api/overview':
             return self._guard(api_overview)
+        if u.path == '/api/onboard':
+            return self._guard(kb.onboard_status)
+        if u.path == '/api/onboard/scan':
+            return self._guard(lambda: {'items': kb.repo_scan()})
+        if u.path == '/api/chat':
+            return self._guard(kb.steward_chat)
         if u.path == '/api/steward':
             return self._guard(kb.steward_view)
         if u.path == '/api/stats':
@@ -607,11 +622,11 @@ class H(BaseHTTPRequestHandler):
                 finally:
                     shutil.rmtree(tmp, ignore_errors=True)
             return self._guard(run)
-        if u.path == '/api/anr/stage':          # 自建问题：先把文件暂存，提交时一起处理
+        if u.path in ('/api/anr/stage', '/api/chat/stage'):   # 先把文件暂存，提交时一起处理（自建问题 / 问管家）
             if not self._from_page():
                 return self._send(403, {'error': '只能在知识库网页上由本人操作'})
             sid = uuid.uuid4().hex
-            d = kb.SYS / 'tmp' / 'anr-stage' / sid
+            d = kb.SYS / 'tmp' / ('chat-stage' if u.path == '/api/chat/stage' else 'anr-stage') / sid
             d.mkdir(parents=True)
             f = d / (kb.safe_name(unquote(self.headers.get('X-Filename', ''))) or 'log.txt')
             with f.open('wb') as fp:
@@ -653,7 +668,7 @@ class H(BaseHTTPRequestHandler):
                       '/api/period/engine', '/api/retest', '/api/retest/plan', '/api/issue', '/api/device', '/api/dev/chat',
                       '/api/plugin', '/api/plugin/dir', '/api/plugin/remove', '/api/plugin/run', '/api/plugin/run2', '/api/plugin/task', '/api/task/push', '/api/task/item', '/api/task/nav', '/api/anr/batch', '/api/stack/end', '/api/stack/plan', '/api/stack/approve', '/api/stack/dev', '/api/stack/stop', '/api/stack/change', '/api/stack/reject', '/api/stack/accept', '/api/period/delete', '/api/period/say',
                       '/api/zentao/settings', '/api/bug/source', '/api/bug/test', '/api/zentao/analyze', '/api/zentao/review', '/api/zentao/fix',
-                      '/api/zentao/fixed', '/api/zentao/unfix', '/api/zentao/ignore', '/api/steward/settings', '/api/steward/answer', '/api/steward/dismiss', '/api/steward/tick', '/api/anr/create', '/api/anr/mapping-url', '/api/period/builds', '/api/build/mapping', '/api/anr/automap') and not self._from_page():
+                      '/api/zentao/fixed', '/api/zentao/unfix', '/api/zentao/ignore', '/api/chat/ask', '/api/chat/confirm', '/api/chat/clear', '/api/chat/rule', '/api/demo', '/api/onboard/repos', '/api/onboard/hide', '/api/steward/settings', '/api/steward/answer', '/api/steward/dismiss', '/api/steward/tick', '/api/anr/create', '/api/anr/mapping-url', '/api/period/builds', '/api/build/mapping', '/api/anr/automap') and not self._from_page():
             return self._send(403, {'error': '只能在知识库网页上由本人操作'})
         if u.path == '/api/base/save':
             return self._guard(lambda: {'msg': kb.base_save(body.get('id', ''), body.get('category', ''), body.get('name'),
@@ -890,12 +905,31 @@ class H(BaseHTTPRequestHandler):
             return self._guard(run)
         if u.path == '/api/anr/delete':
             return self._guard(lambda: {'msg': kb.anr_delete_sample(body.get('sample', ''))})
+        if u.path == '/api/onboard/repos':
+            return self._guard(lambda: {'msg': kb.onboard_add_repos(body.get('paths') or [])})
+        if u.path == '/api/demo':
+            return self._guard(lambda: {'msg': kb.demo_create(), 'name': kb.DEMO})
+        if u.path == '/api/onboard/hide':
+            return self._guard(lambda: {'msg': kb.onboard_hide(body.get('hide', True) is not False)})
+        if u.path == '/api/chat/ask':
+            def ask():
+                root = kb.SYS / 'tmp' / 'chat-stage'
+                files = [next((root / i).iterdir()) for i in body.get('files') or []
+                         if re.fullmatch(r'[0-9a-f]{32}', i or '') and (root / i).is_dir()]
+                return {'id': kb.steward_ask(body.get('text', ''), body.get('page', ''), files=files)}
+            return self._guard(ask)
+        if u.path == '/api/chat/confirm':
+            return self._guard(lambda: {'msg': kb.chat_confirm(body.get('id', ''), body.get('repo', ''), body.get('branch', ''))})
+        if u.path == '/api/chat/clear':
+            return self._guard(lambda: {'msg': kb.steward_chat_clear()})
+        if u.path == '/api/chat/rule':
+            return self._guard(lambda: {'msg': kb.steward_rule(body.get('text', ''), body.get('delete', ''), by='用户（网页）')})
         if u.path == '/api/steward/settings':
             return self._guard(lambda: {'msg': kb.steward_set(body.get('on'), body.get('level'), body.get('limit'), body.get('actions'), body.get('new_days'))})
         if u.path == '/api/steward/dismiss':
             return self._guard(lambda: {'msg': kb.steward_dismiss(body.get('id', ''))})
         if u.path == '/api/steward/answer':
-            return self._guard(lambda: {'msg': kb.steward_answer(body.get('id', ''), body.get('value', ''))})
+            return self._guard(lambda: {'msg': kb.steward_answer(body.get('id', ''), body.get('value', ''), repo=body.get('repo', ''), branch=body.get('branch', ''))})
         if u.path == '/api/steward/tick':
             return self._guard(lambda: {'msg': kb.steward_tick('用户（网页）')})
         if u.path == '/api/reindex':

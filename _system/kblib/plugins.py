@@ -173,6 +173,25 @@ def _plugin_env(p, by, **kw):
     return env
 
 
+NOTIFY_CAP = '通知'
+
+
+def notify_plugins(title, text, kind=''):
+    """把通知也发到「通知」插件（飞书 / 钉钉 / 企业微信 / Slack 群机器人等）：命令 + notify <标题>，标准输入是正文。
+    插件配置「范围」= 管家 时只收管家的日报和提问（kind='管家'），= 全部 时所有通知都收。失败不影响别的。"""
+    for p in plugins():
+        if NOTIFY_CAP not in (p.get('能力') or []) or not p.get('启用') or p.get('错误'):
+            continue
+        if (p['配置'].get('范围') or '全部') == '管家' and kind != '管家':
+            continue
+        try:
+            cmd = [sys.executable if x == '{python}' else x for x in p['命令']] + ['notify', title]
+            subprocess.run(cmd, cwd=p['目录'], env=_plugin_env(p, '通知', KB_EVENT='通知'), input=text, text=True,
+                           capture_output=True, timeout=int(p.get('超时') or 20))
+        except Exception as e:
+            print('通知插件出错：', p.get('名称'), repr(e), flush=True)
+
+
 def tool_plugins():
     return [p for p in plugins() if p.get('工具') and not p.get('错误')]
 

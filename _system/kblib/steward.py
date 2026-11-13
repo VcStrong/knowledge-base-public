@@ -24,6 +24,8 @@ from .bugs.index import zt_load
 from .bugs import analysis as _an
 from . import refresh as _refresh
 from .anr.store import anr_problems
+from .guide import period_guide
+from .stack import stack_plan_start
 
 DIR = SYS / '管家'
 LOG = DIR / '记录.jsonl'
@@ -35,6 +37,8 @@ PER_TICK = 3                   # 每一轮最多自动分析几个 Bug（防止�
 ACTIONS = {                    # 管家能自己做的动作：都是只读或可以重做的
     'Bug分析': ('Bug 只读分析', '最近几天新建的 Bug、被你打回的，自动在它的仓库里只读分析（不改代码），结论等你审核；陈旧的老 Bug 不分析'),
     '来源整理': ('需求资料重新整理', '需求原文有变化时，后台按新原文重新整理条目，标出改了什么'),
+    '出方案': ('资料齐了就出方案', '最近有动静的期：需求放进来了、端的仓库也选好了，自动让 AI 出方案（只读，不改代码），出好了等你拍板'),
+    'ANR建事项': ('新 ANR / 崩溃建事项', '最近几天新出现、还没归属的 ANR / 崩溃问题，自动建事项（同一批归一个），然后只问你在哪个工程、哪个分支推动'),
 }
 _LOCK = threading.Lock()
 
@@ -230,6 +234,21 @@ def _observe():
                           '说明': (q[0].get('问题') or '')[:80], '为什么': 'AI 在等你决定，不回答它会停在这里；不想被打扰可以开「🌙 免打扰」。',
                           '按钮': '去回答', '链接': link})
         fs = (m.get('全栈') or {}).get('状态')
+        if not is_task(m) and st in ('收集中', '已批准开发', '开发中') and (m.get('更新时间') or '') >= _since(14):
+            try:
+                g = period_guide(n)
+            except Exception:
+                g = None
+            nx = (g or {}).get('下一步') or {}
+            if nx.get('文字') == '让 AI 出方案' and (m.get('全栈') or {}).get('状态') == '出方案失败':
+                cards.append({'id': f'planfail:{n}:{(m.get("全栈") or {}).get("方案时间", "")}', '类型': '待你', '标题': f'「{n}」上次方案没出来',
+                              '说明': '看「全栈」里的记录，补资料或改意见后再点「🧭 出方案」', '为什么': '失败过的我不自动重试，免得白花 token。',
+                              '按钮': '去看看', '链接': link})
+            elif nx.get('文字') == '让 AI 出方案' and not any(r.get('动作') == '出方案' and r.get('对象') == n for r in steward_log(200, now()[:10])):
+                autos.append(('出方案', f'出方案:{n}:{m.get("更新时间", "")}', n, '需求和各端仓库都有了', {}))
+            elif nx.get('文字') in ('给涉及的端选代码仓库', '方案已拍板，点开工'):
+                cards.append({'id': f'guide:{n}:{nx["文字"]}', '类型': '待你', '标题': f'「{n}」：{nx["文字"]}', '说明': nx.get('说明', ''),
+                              '为什么': '这一步要你定，定了我接着往下推。', '按钮': nx.get('按钮') or '去处理', '链接': link})
         if fs == '待拍板':
             cards.append({'id': f'approve:{n}:{(m.get("全栈") or {}).get("方案时间", "")}', '类型': '待你', '标题': f'「{n}」的方案出好了，等你拍板',
                           '说明': '需求规格、设计对照、各端改动和接口契约', '为什么': '拍板后才能开工；不对就写意见重出。', '按钮': '去拍板', '链接': link})
@@ -248,14 +267,50 @@ def _observe():
                               '说明': '开发中，但没有会话在跑，也没有新记录', '为什么': '可能卡在什么地方。去看看：继续开发、补充说明，或者改成已暂停。',
                               '按钮': '去看看', '链接': link})
     try:
-        new = [p for p in anr_problems() if not p.get('事项') and p.get('状态') != '忽略']
+        free = [p for p in anr_problems() if not p.get('事项') and p.get('状态') != '忽略']
     except Exception:
-        new = []
+        free = []
+    cut = _since(nd)
+    fresh = [p for p in free if (p.get('最近') or '') >= cut]
+    new = [p for p in free if p not in fresh]
+    if fresh:
+        ids = sorted(p['编号'] for p in fresh)
+        autos.append(('ANR建事项', 'ANR建事项:' + ','.join(ids), ids, f'{len(ids)} 个新出现的 ANR / 崩溃问题还没归属', {}))
+    cards += _push_cards(cut)
     if new:
         cards.append({'id': 'anr-new:' + ','.join(sorted(p['编号'] for p in new))[:300], '类型': '建议', '标题': f'{len(new)} 个 ANR / 崩溃问题还没放进批次',
                       '说明': '、'.join(f'{p["编号"]}（{p.get("次数", 0)} 次）' for p in sorted(new, key=lambda p: -(p.get('次数') or 0))[:5]),
                       '为什么': '放进批次后才能逐条推动处理；推动会让 AI 改代码，所以要你点。', '按钮': '去处理', '链接': '#/anr'})
     return autos, cards
+
+
+def _push_cards(cut):
+    """最近建的 ANR / 崩溃事项里还没推动的条目：只问工程和分支（默认值选好），点了就推动。"""
+    from .intake import push_proposal
+    out = []
+    for n in period_names():
+        try:
+            m = load_meta(PERIODS / n)
+        except Exception:
+            continue
+        if not is_task(m) or m.get('事项类型') != 'ANR/崩溃' or m.get('状态') == '已完成' or (m.get('创建时间') or '') < cut:
+            continue
+        s = m.get('开发会话') or {}
+        if s.get('状态') == '运行中' and _alive(s.get('pid', 0)):
+            continue
+        st = m.get('条目状态') or {}
+        try:
+            prop = push_proposal(n)
+        except Exception:
+            continue
+        keys = [k for k in prop['条目'] if not (st.get(k) or {}).get('状态')]
+        if not keys:
+            continue
+        prop['条目'] = keys
+        out.append({'id': f'push:{n}:{",".join(keys)}', '类型': '问你', '标题': f'「{n}」{len(keys)} 个问题，确认工程就开始处理',
+                    '说明': '默认工程和分支已经选好，不对就改', '为什么': '推动会让 AI 改代码，要你点一下；点了就定位原因 → 改代码 → 自测 → 写结论。',
+                    '提议': prop, '链接': '#/p/' + n})
+    return out
 
 
 # ---------------------------------------------------------------- 2-4. 判、分流、做
@@ -290,6 +345,14 @@ def _fresh(d):
     if d['动作'] == 'Bug分析':
         e = (zt_load().get('Bug') or {}).get(d['对象'])
         return bool(e) and _bug_need(e) and _bug_key(e) == d['键']
+    if d['动作'] == '出方案':
+        try:
+            return (period_guide(d['对象']) or {}).get('下一步', {}).get('文字') == '让 AI 出方案'
+        except Exception:
+            return False
+    if d['动作'] == 'ANR建事项':
+        ps = {p['编号']: p for p in anr_problems()}
+        return all(x in ps and not ps[x].get('事项') for x in d['对象'])
     if d['动作'] == '来源整理':
         try:
             m = load_meta(PERIODS / d['对象'])
@@ -320,6 +383,30 @@ def _act(go, st):
             msg, res = str(e), '失败'
         out.append(_record(方式='自动', 动作='Bug分析', 对象=ids, 数量=len(ids), 结果=res, 说明=msg,
                            依据={d['对象']: d['依据'] for d in bugs}, 置信度=1.0, 去向='auto', 链接='#/bugs'))
+    for d in [d for d in go if d['动作'] == '出方案'][:2]:
+        if not _fresh(d):
+            continue
+        done[d['键']] = now()
+        _save_state(st)
+        try:
+            msg, res = stack_plan_start(d['对象'], by='管家（自动）'), '已开始'
+        except Exception as e:
+            msg, res = str(e), '失败'
+        out.append(_record(方式='自动', 动作='出方案', 对象=d['对象'], 数量=1, 结果=res, 说明=msg, 依据=d['依据'],
+                           置信度=1.0, 去向='auto', 链接='#/p/' + d['对象']))
+    for d in [d for d in go if d['动作'] == 'ANR建事项']:
+        if not _fresh(d):
+            continue
+        done[d['键']] = now()
+        _save_state(st)
+        try:
+            from .intake import link_task
+            task = link_task(d['对象'], by='管家（自动）')
+            msg, res = f'{len(d["对象"])} 个问题归到事项「{task}」，等你确认工程推动', '已建事项'
+        except Exception as e:
+            task, msg, res = '', str(e), '失败'
+        out.append(_record(方式='自动', 动作='ANR建事项', 对象=d['对象'], 数量=1, 结果=res, 说明=msg, 依据=d['依据'],
+                           置信度=1.0, 去向='auto', 链接=('#/p/' + task) if task else '#/anr'))
     for d in [d for d in go if d['动作'] == '来源整理']:
         if not _fresh(d):
             continue
@@ -350,7 +437,7 @@ def _brief(st, cards):
     st['日报日期'] = today
     st['日报'] = {'日期': today, '内容': text}
     _record(方式='日报', 动作='日报', 说明=text)
-    _notify('知识库 · 管家日报', text)
+    _notify('知识库 · 管家日报', text, '管家')
 
 
 def steward_tick(by='定时'):
@@ -370,7 +457,7 @@ def steward_tick(by='定时'):
             for c in cards:
                 if c['类型'] == '问你' and c['id'] not in asked:
                     asked[c['id']] = now()
-                    _notify('知识库 · 管家有问题问你', c['标题'])
+                    _notify('知识库 · 管家有问题问你', c['标题'] + '\n' + (c.get('说明') or ''), '管家')
             if len(asked) > 500:
                 st['已提醒'] = dict(sorted(asked.items(), key=lambda kv: kv[1])[-300:])
         done = st.get('已做') or {}
@@ -400,11 +487,12 @@ def steward_view():
         cards.append({'id': f'suggest:{act}:' + ','.join(map(str, objs[:30])), '类型': '建议', '标题': f'建议{name}：{len(xs)} 件',
                       '说明': '；'.join(f'{o}（{w}）' for o, w, _ in xs[:4]) + ('…' if len(xs) > 4 else ''), '为什么': xs[0][2],
                       '按钮': '现在就做', '动作': 'run', '对象': {'动作': act, '对象': objs[:20]},
-                      '链接': '#/bugs' if act == 'Bug分析' else '#/p/' + objs[0]})
+                      '链接': '#/bugs' if act == 'Bug分析' else '#/anr' if act == 'ANR建事项' else '#/p/' + objs[0]})
     for act, key, obj, why, _ in autos:            # 自动整理过一次还没整理完：不再自动重试，交给你看
         if act == '来源整理' and key in (st.get('已做') or {}):
             cards.append({'id': 'src-left:' + key, '类型': '待你', '标题': f'「{obj}」的需求资料自动整理过一次，还没整理完',
                           '说明': why, '为什么': '可能原文改动太大或链接失效，去「来源核对」看看。', '按钮': '去看看', '链接': '#/p/' + obj})
+    cards += _upgrade_cards(cfg)
     cards = [c for c in cards if c['id'] not in ign]
     order = {'问你': 0, '待你': 1, '建议': 2}
     cards.sort(key=lambda c: order.get(c['类型'], 3))
@@ -412,7 +500,28 @@ def steward_view():
     return {'设置': cfg, '自主度选项': list(LEVELS), '动作': [{'id': k, '名称': v[0], '说明': v[1], '开启': k not in cfg['关闭动作']} for k, v in ACTIONS.items()],
             '卡片': cards, '已做': [r for r in steward_log(30) if r.get('方式') == '自动'], '今日已做': _used_today(),
             '日报': st.get('日报') if (st.get('日报') or {}).get('日期') == today else None,
-            '上次': st.get('上次', ''), '结果': st.get('结果', '')}
+            '上次': st.get('上次', ''), '结果': st.get('结果', ''),
+            '规矩': [r for r in load_settings().get('管家规矩') or [] if isinstance(r, dict) and r.get('内容')]}
+
+
+def _upgrade_cards(cfg):
+    """信任逐步建立：某类建议你最近 14 天里都点了「现在就做」（≥3 次、没点过「不用了」），问你以后要不要直接做。"""
+    if not cfg['开启']:
+        return []
+    since = _since(14)
+    logs = [r for r in steward_log(500) if r.get('时间', '') >= since]
+    out = []
+    for act, (name, _) in ACTIONS.items():
+        auto_now = cfg['自主度'] != '保守' and act not in cfg['关闭动作']
+        if auto_now:
+            continue
+        ran = sum(1 for r in logs if r.get('方式') == '手动' and r.get('动作') == act)
+        no = sum(1 for r in logs if r.get('方式') == '忽略' and str(r.get('对象', '')).startswith(f'suggest:{act}:'))
+        if ran >= 3 and not no:
+            out.append({'id': f'upgrade:{act}', '类型': '建议', '标题': f'「{name}」以后让我直接做？',
+                        '说明': f'最近 14 天这类建议你都点了「现在就做」（{ran} 次）', '为什么': '直接做的事每天早上的日报里都看得到，随时能在设置里关掉。',
+                        '按钮': '以后直接做', '动作': 'upgrade', '对象': act, '链接': '#/settings'})
+    return out
 
 
 def steward_dismiss(cid):
@@ -447,12 +556,18 @@ def _mark_done(act, objs):
     _save_state(st)
 
 
-def steward_answer(cid, value, by='用户（网页）'):
+def steward_answer(cid, value, by='用户（网页）', repo='', branch=''):
     """回答管家的问题 / 点建议卡片上的「现在就做」。"""
     v = steward_view()
     c = next((x for x in v['卡片'] if x['id'] == cid), None)
     if not c:
         raise KBError('这件事已经变了，刷新看看')
+    if c.get('提议'):
+        from .intake import confirm_push
+        p = c['提议']
+        msg = confirm_push(p['事项'], p['条目'], repo, branch, by=by)
+        _record(方式='手动', 动作='推动', 对象=p['事项'], 数量=len(p['条目']), 结果='已推动', 说明=msg, 回答人=by, 工程=repo, 分支=branch)
+        return msg
     if c.get('动作') == 'bug-repo':
         if not value:
             raise KBError('先选一个仓库')
@@ -460,6 +575,11 @@ def steward_answer(cid, value, by='用户（网页）'):
         _mark_done('Bug分析', c['对象'])
         _record(方式='回答', 动作='Bug分析', 对象=c['对象'], 数量=len(c['对象']), 结果='已开始', 说明=msg, 回答=value, 回答人=by)
         return msg
+    if c.get('动作') == 'upgrade':
+        act = c['对象']
+        msg = steward_set(level='标准' if steward_settings()['自主度'] == '保守' else None, actions={act: True})
+        _record(方式='手动', 动作='放权', 对象=act, 结果='已开启', 说明=msg, 回答人=by)
+        return f'好，以后「{ACTIONS[act][0]}」我直接做，日报里告诉你。' + ('（自主度改成了「标准」）' if '标准' in msg else '')
     if c.get('动作') == 'ignore':
         from .bugs.index import bug_ignore
         msg = bug_ignore(c['对象'], True, f'管家建议：超过 {STALE_DAYS} 天没动', by=by)
@@ -469,6 +589,11 @@ def steward_answer(cid, value, by='用户（网页）'):
         act, objs = c['对象']['动作'], c['对象']['对象']
         if act == 'Bug分析':
             msg = _an.bug_analyze(objs, by=by)
+        elif act == '出方案':
+            msg = '\n'.join(stack_plan_start(o, by=by) for o in objs)
+        elif act == 'ANR建事项':
+            from .intake import link_task
+            msg = '归到事项「' + link_task([x for o in objs for x in (o if isinstance(o, list) else [o])], by=by) + '」，确认工程就能推动'
         else:
             msg = '\n'.join(_refresh.claude_update(o) for o in objs)
         _mark_done(act, objs)

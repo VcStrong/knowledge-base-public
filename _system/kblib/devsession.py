@@ -34,13 +34,16 @@ _NO_BG = """
 或启动后持续等待（查看输出、sleep 轮询）直到完成再继续。只有全部完成、或在 kb_wait_answer 里等待用户时才可以停。"""
 
 
-def _notify(title, text):
+def _notify(title, text, kind=''):
+    """系统通知（Mac）+ 挂了「通知」插件的话发到群机器人（Linux 服务器上就靠它）。kind='管家'：管家的日报和提问。"""
     esc = lambda x: re.sub(r'\s+', ' ', x).replace('\\', '\\\\').replace('"', '\\"')
     try:
         subprocess.Popen(['osascript', '-e', f'display notification "{esc(text)[:120]}" with title "{esc(title)[:60]}" sound name "Glass"'],
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except OSError:
         pass
+    from .plugins import notify_plugins
+    threading.Thread(target=notify_plugins, args=(title, text, kind), daemon=True).start()
 
 
 def set_dnd(period, on, by='用户'):

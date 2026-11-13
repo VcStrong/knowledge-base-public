@@ -126,8 +126,8 @@ def _setup_task(name, branch, repo, by):
         out.append(f'分支 {branch}')
     if repo:
         rp = Path(repo).expanduser()
-        if not (rp / '.git').exists():
-            raise KBError(f'{rp} 不是 git 仓库')
+        if not ((rp / '.git').exists() or (rp / '.svn').exists()):
+            raise KBError(f'{rp} 不是 git 仓库，也不是 svn 工作副本')
         m = load_meta(d)
         m['开发仓库'] = str(rp)
         save_meta(d, m)

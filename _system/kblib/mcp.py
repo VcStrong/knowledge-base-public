@@ -36,6 +36,9 @@ from .memo import task_item_set, task_items
 from .stack import stack_change_add, stack_plan_submit
 from .stackdev import stack_report, stack_review
 from .hosts import repo_read
+from .chat import propose_push, steward_rule
+from .intake import anr_intake_text
+from .steward import steward_text
 from .anr.store import anr_add, anr_link, anr_list, anr_mapping, anr_set_version, anr_show
 
 
@@ -260,6 +263,16 @@ TOOLS = [
                        '插件需要的账号由知识库从基础信息交给插件，不要自己找密码。',
      S(plugin=STR('插件 id（先不带参数调用一次看有哪些）'), args={'type': 'array', 'items': {'type': 'string'}, 'description': '传给插件的参数'},
        iteration=STR('相关的期 / 事项名（可空；填了会在它的记录里记一笔调用）')), []),
+    ('kb_steward_rule', '管家规矩：用户说「以后……」「记住……」「别再……」这类长期要求时记一条（text），以后的回答和自动巡检都照做；'
+                        'delete=规矩编号 删掉一条；都不填 = 列出现在的规矩。',
+     S(text=STR('规矩，一句话，如：以后 Bug 分析结论先写复现步骤'), delete=STR('要删的规矩编号')), []),
+    ('kb_anr_create', 'ANR / 崩溃日志的文字（用户贴给你的）→ 归档成问题（同一问题自动合并计数）并归到事项（没有就新建）。'
+                      '用户给了日志就直接调，不要问版本、来源这些；之后用 kb_propose_push 让用户确认工程和分支开始推动。',
+     S(text=STR('日志原文（完整贴进来）')), ['text']),
+    ('kb_propose_push', '在网页「问管家」对话里放一个「▶ 推动」确认按钮（带默认工程和分支），用户点了就开始分析、修改、自测。'
+                        '推动 / 修复要动代码，必须这样让用户点，不要自己推动，也不要让用户自己去页面找。',
+     S(iteration=STR('事项名')), ['iteration']),
+    ('kb_steward', '管家现在的情况：待你处理 / 问你 / 建议的卡片、今天自动做了什么、日报。用户问「我现在该干嘛」「有什么要我处理」时用。', S(), []),
     ('kb_anr_link', '把 ANR / 崩溃问题关联到事项：task 写已有事项名，或「＋新建」自动建一个「ANR/崩溃」事项；空字符串 = 取消关联。'
                     '也可以设 version 给版本不明的样本补版本号。用户说了才改。',
      S(id=STR('问题编号'), task=STR('事项名 / ＋新建 / 空'), version=STR('给这个问题版本不明的样本补版本号'), note=STR('备注')), ['id']),
@@ -404,6 +417,15 @@ def _call_tool(name, a):
         return builds_text(g('iteration'), int(g('count') or 5))
     if name == 'kb_plugin_call':
         return call_plugin(g('plugin') or '', g('args') or [], g('iteration') or '')
+    if name == 'kb_steward_rule':
+        return steward_rule(g('text') or '', g('delete') or '')
+    if name == 'kb_anr_create':
+        task, pids, desc = anr_intake_text(g('text'), by='Claude（问管家）')
+        return f'{desc}。事项：{task}；接着用 kb_propose_push 让用户确认工程和分支'
+    if name == 'kb_propose_push':
+        return propose_push(g('iteration'))
+    if name == 'kb_steward':
+        return steward_text()
     if name == 'kb_anr_link':
         out = []
         if g('version'):

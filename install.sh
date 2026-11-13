@@ -1,11 +1,20 @@
 #!/bin/bash
 # From 大大王.DT
 # 知识库一键安装：建 Python 环境、初始化空知识库、加 kb 命令、接入 Claude Code。可重复运行。macOS（本机）和 Linux（远端服务器）都行。
-# 用法：./install.sh [--autostart] [--host 0.0.0.0] [--port 11555] [--no-mcp] [--no-alias]
+# 用法：./install.sh [--autostart] [--host 0.0.0.0] [--port 11555] [--no-mcp] [--no-alias] [--no-open]
+# 一行安装（还没下载程序时）：curl -fsSL https://raw.githubusercontent.com/VcStrong/knowledge-base-public/main/install.sh | bash
 set -euo pipefail
 
-DIR=$(cd "$(dirname "$0")" && pwd)
-AUTOSTART=0; MCP=1; ALIAS=1; HOST=127.0.0.1; PORT=11555
+DIR=$(cd "$(dirname "$0")" 2>/dev/null && pwd || pwd)
+if [ ! -f "${DIR}/_system/kb.py" ]; then          # 通过 curl | bash 运行：先把程序下载到 ~/knowledge-base（或 KB_DIR）
+  REPO_URL="${KB_REPO:-https://github.com/VcStrong/knowledge-base-public.git}"
+  DEST="${KB_DIR:-${HOME}/knowledge-base}"
+  command -v git >/dev/null || { echo "需要 git（macOS：xcode-select --install；Linux：apt install git）" >&2; exit 1; }
+  if [ -d "${DEST}/.git" ]; then git -C "${DEST}" pull -q --ff-only || true
+  else git clone -q "${REPO_URL}" "${DEST}" || { echo "下载失败：${REPO_URL}" >&2; exit 1; }; fi
+  exec bash "${DEST}/install.sh" "$@"
+fi
+AUTOSTART=0; MCP=1; ALIAS=1; HOST=127.0.0.1; PORT=11555; OPEN=1
 while [ $# -gt 0 ]; do
   case "$1" in
     --autostart) AUTOSTART=1 ;;
@@ -13,6 +22,7 @@ while [ $# -gt 0 ]; do
     --port) PORT="$2"; shift ;;
     --no-mcp) MCP=0 ;;
     --no-alias) ALIAS=0 ;;
+    --no-open) OPEN=0 ;;
     -h|--help) sed -n 2,3p "$0" | sed 's/^# //'; exit 0 ;;
     *) echo "未知参数：$1" >&2; exit 1 ;;
   esac
@@ -146,12 +156,27 @@ UNITF
   fi
 fi
 
-# 7. 其他检查
+# 8. 其他检查
 command -v git >/dev/null && ok "git 可用" || warn "没有 git：代码仓库索引、开发分支识别不可用（macOS：xcode-select --install；Linux：apt install git）"
+
+# 9. 装在本机：启动网页并打开浏览器，首页有「三步上手」
+URL="http://127.0.0.1:${PORT}"
+case "${HOST}" in 127.0.0.1|localhost) LOCAL=1 ;; *) LOCAL=0 ;; esac
+if [ "${OPEN}" = 1 ] && [ "${LOCAL}" = 1 ] && [ -t 1 ]; then
+  if ! curl -s -o /dev/null "${URL}/" 2>/dev/null; then
+    nohup "${DIR}/kb" web --port "${PORT}" >> "${DIR}/_system/web.log" 2>&1 &
+    for _ in 1 2 3 4 5 6 7 8 9 10; do curl -s -o /dev/null "${URL}/" 2>/dev/null && break; sleep 1; done
+  fi
+  if curl -s -o /dev/null "${URL}/" 2>/dev/null; then
+    ok "网页已启动：${URL}"
+    if [ "${OS}" = Darwin ]; then open "${URL}" >/dev/null 2>&1 || true; else command -v xdg-open >/dev/null && xdg-open "${URL}" >/dev/null 2>&1 || true; fi
+  fi
+fi
 
 cat <<TXT
 
-安装完成。接下来：
+安装完成。浏览器里的「👋 三步上手」会带你走一遍（不想自己准备，点「先看一个示例」）。
+接下来：
   1. 新开一个终端（或 source ~/.zshrc），运行  kb  看总览
   2. kb web$( [ "${HOST}" = 127.0.0.1 ] || printf ' --host %s' "${HOST}" )  打开网页 http://${HOST}:${PORT}（「? 帮助」里有使用说明）
   3. 在这台机器的 Claude Code 里执行 /mcp，确认 kb 已连接

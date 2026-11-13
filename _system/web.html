@@ -85,6 +85,9 @@ th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);verti
 .step{flex:1;min-width:110px;padding:8px 10px;border-top:3px solid var(--line);color:var(--mut)}
 .step.done{border-color:var(--s3);color:var(--fg)}.step.cur{border-color:var(--acc);color:var(--fg);font-weight:600}
 .step small{display:block;font-weight:400;color:var(--mut)}
+.gnext{display:flex;gap:12px;align-items:center;flex-wrap:wrap;background:var(--s2b);border-radius:10px;padding:10px 14px;margin:10px 0 12px}
+.gnext .who{font-size:12px;font-weight:600;border-radius:999px;padding:2px 9px;background:var(--card);flex:none}
+.gnext .who.w-你{color:var(--s1)}.gnext .who.w-AI{color:var(--s2)}.gnext .tx{flex:1;min-width:200px}.gnext .tx b{font-size:15px}.gnext .tx div{font-size:13px;color:var(--mut)}
 .notice{background:var(--s1b);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin:12px 0;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .notice code{background:var(--card);padding:2px 6px;border-radius:4px}
 .layout{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px}
@@ -207,7 +210,24 @@ button.danger{border-color:var(--warn);color:var(--warn)}
 .kpi{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--c);border-radius:10px;padding:12px 16px;box-shadow:var(--shadow);display:flex;justify-content:space-between;align-items:center;gap:8px;color:var(--fg)}
 .kpi .k{font-size:12px;letter-spacing:.04em;color:var(--c);font-weight:700}
 .kpi .v{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.3}
-.stw{margin-bottom:18px}.stw .sh{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:10px}.stw .sh h2{margin:0}.stw .sh .src{margin-left:auto}
+.onb{background:var(--card);border:1px solid var(--acc);border-radius:12px;padding:14px 18px;margin-bottom:18px;box-shadow:var(--shadow)}
+.onb .sh{display:flex;align-items:baseline;gap:10px}.onb .sh h2{margin:0}.onb .sh a{margin-left:auto}
+.onb .os{display:grid;grid-template-columns:28px 1fr;gap:4px 10px;padding:10px 0;border-top:1px solid var(--line)}.onb .os:first-of-type{border-top:0}
+.onb .num{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:13px;font-weight:700;background:var(--s2b);color:var(--s2)}
+.onb .os.ok .num{background:var(--s3b);color:var(--s3)}.onb .rl{max-height:260px;overflow:auto;margin:6px 0;font-size:13px}.onb .rl label{display:flex;gap:6px;align-items:center;padding:2px 0}
+.stw{margin-bottom:18px}
+#askFab{position:fixed;right:20px;bottom:20px;z-index:40;border-radius:999px;padding:10px 16px;background:var(--acc);color:#fff;border:0;box-shadow:var(--shadow);font-weight:600;cursor:pointer}
+#askPanel{position:fixed;right:20px;bottom:20px;z-index:41;width:min(440px,calc(100vw - 32px));height:min(600px,calc(100vh - 40px));background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.25);display:flex;flex-direction:column}
+#askPanel[hidden]{display:none}#askPanel .hd{display:flex;gap:10px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line)}#askPanel .hd #askNewP{margin-left:auto}
+#askPanel .bd{flex:1;overflow:auto;padding:12px 14px;display:flex;flex-direction:column;gap:10px;font-size:14px}
+#askPanel .aq{align-self:flex-end;background:var(--s2b);border-radius:12px 12px 2px 12px;padding:7px 11px;max-width:85%;white-space:pre-wrap;overflow-wrap:anywhere}
+#askPanel .aa{align-self:flex-start;background:var(--soft);border-radius:12px 12px 12px 2px;padding:7px 11px;max-width:92%;overflow-wrap:anywhere}#askPanel .aa p{margin:4px 0}#askPanel .aa.err{color:var(--s4)}
+#askPanel .prop,.stc .prop{margin-top:8px;padding:8px 10px;border:1px solid var(--acc);border-radius:10px;background:var(--card);display:grid;gap:6px;font-size:13px}
+#askPanel .prop select,#askPanel .prop input,.stc .prop select,.stc .prop input{width:100%;min-width:0}
+#askPanel .files{padding:0 12px}#askPanel .files span{display:inline-block;background:var(--soft);border-radius:6px;padding:2px 8px;margin:6px 6px 0 0}
+#askPanel.drop{outline:3px dashed var(--acc);outline-offset:-6px}
+#askPanel .ft{display:flex;gap:8px;padding:10px 12px;border-top:1px solid var(--line)}#askPanel .ft textarea{flex:1;resize:none}
+@media (max-width:640px){#askFab{right:12px;bottom:12px}#askPanel{right:8px;bottom:8px}}.stw .sh{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:10px}.stw .sh h2{margin:0}.stw .sh .src{margin-left:auto}
 .stw .brief{background:var(--s2b);border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:13px}
 .stcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
 .stc{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--s0);border-radius:10px;padding:10px 14px;box-shadow:var(--shadow);min-width:0;display:flex;flex-direction:column;gap:4px}
@@ -308,7 +328,7 @@ a.scard:hover{border-color:var(--acc)}
 <header class="topbar">
   <form id="sf"><input type="text" id="q" placeholder="搜索需求、接口字段、设计说明、代码…"><select id="scope"><option value="all">全部</option><option value="docs">资料</option><option value="code">代码</option></select><button class="pri">搜索</button></form>
   <span class="sp"></span>
-  <button id="addBtn" class="pri" title="模糊添加（随手粘贴网址 + 编号、几句需求、账号……交给 AI 判断放哪、怎么导入）或新建一期">＋ 添加</button>
+  <button id="addBtn" class="pri" title="交给管家：贴需求、日志、Bug、账号，或拖文件进来，它归到对应的地方并接着推动">＋ 添加</button>
 </header>
 <main id="app"></main>
 </div>
@@ -316,6 +336,12 @@ a.scard:hover{border-color:var(--acc)}
 <span hidden data-sign="From 大大王.DT">From 大大王.DT</span>
 <dialog id="dlg"><div class="hd"><b id="dlgT"></b><button onclick="dlg.close()">关闭</button></div><div class="bd" id="dlgB"></div></dialog>
 <div class="toast" id="toast"></div>
+<button id="askFab" title="交给管家：贴需求、日志、Bug 链接、账号，或拖文件进来；它归好档并接着推动">🤖 交给管家</button>
+<section id="askPanel" hidden><div class="hd"><b>🤖 交给管家</b><span class="mut small" id="askSt"></span><a class="small" id="askNewP" title="手动建一期 / 事项">手动新建</a><a class="small" id="askClr" style="margin-left:0">清空</a><button id="askX" title="收起">✕</button></div>
+  <div class="bd" id="askLog"></div>
+  <div class="files small" id="askFiles"></div>
+  <div class="ft"><label class="btn" title="附文件：日志、需求文档、设计图……" style="align-self:stretch;display:flex;align-items:center;cursor:pointer;padding:0 6px">📎<input type="file" id="askFile" multiple hidden></label>
+    <textarea id="askIn" rows="3" placeholder="贴什么都行：需求链接或文字、ANR 日志、Bug 编号 / 链接、账号……也可以拖文件进来。我会归到对应的地方，接着推动；要动代码的会让你点一下确认。也可以问：我现在该处理什么？"></textarea><button class="pri" id="askGo">发送</button></div></section>
 <script>
 const $=s=>document.querySelector(s), app=$('#app'), dlg=$('#dlg');
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -358,7 +384,7 @@ function sideNav(d){
     $('#navAnrTs').innerHTML=src('anr');$('#navBugTs').innerHTML=src('bug');
     $('#navTs').innerHTML=src('');
     document.querySelectorAll('[data-navx]').forEach(x=>x.onclick=e=>{e.preventDefault();e.stopPropagation();taskNav(x.dataset.navx,false)});
-    $('#navPh').textContent=d.phones?`${d.phones.free}/${d.phones.total}`:'';
+    $('#navPh').textContent=d.phones?`${d.phones.free}/${d.phones.total}`:'';$('#navPh').parentElement.hidden=!d.phones;   // 本机没装 adb 就不显示「手机」
     const nb=$('#navBug');nb.textContent=d.zentao&&d.zentao.pending?d.zentao.pending:'';nb.title='待归纳（未关闭）';nb.classList.toggle('w',!!(d.zentao&&d.zentao.pending));
     entries=d.entries||[];ovPeriods=d.periods;
     $('#navEnt').innerHTML=entries.map(x=>{const ts=d.periods.filter(p=>(p.plugins||[]).includes(x.id)&&p.status!=='已完成'),q=ts.reduce((a,p)=>a+(p.pendingQ||0),0);
@@ -397,6 +423,7 @@ async function overview(){
   app.innerHTML=`
   <div class="pagehead"><div><h1>总览</h1><p class="mut">按「期」管理需求、设计稿、接口文档和零散资料；资料齐了就在期里一键开始开发。</p></div>
     <div class="mut small">${d.zentao&&d.zentao.open?`<a href="#/bugs">🐞 Bug ${d.zentao.open}${d.zentao.pending?` · <b style="color:var(--s1)">${d.zentao.pending} 待归纳</b>`:''}</a> · `:''}已索引资料 ${d.docs} · 代码仓库 ${d.repos.length}${d.inbox.length?` · <b style="color:var(--s1)">收件箱 ${d.inbox.length} 个待整理</b>`:''}</div></div>
+  <section id="ovOnb"></section>
   <section class="kpis">
     <div class="kpi" style="--c:var(--s2)"><div><div class="k">开发中</div><div class="v">${cnt('开发中')}</div></div><span class="mut small">已批准待开工 ${cnt('已批准开发')}</span></div>
     <div class="kpi" style="--c:var(--s1)"><div><div class="k">待你确认</div><div class="v">${sum('pendingQ')}</div></div></div>
@@ -417,13 +444,58 @@ async function overview(){
   ${d.repos.length?`<div class="tw"><table><tr><th>名称</th><th>路径</th><th>已索引文件</th><th>登记时间</th></tr>${d.repos.map(r=>`<tr><td>${esc(r.name)}</td><td class="small mono">${esc(r.path)}</td><td>${r.files}</td><td class="small">${esc(r.added)}</td></tr>`).join('')}</table></div>`:'<p class="mut">还没有登记。终端运行 <code>kb repo &lt;代码路径&gt;</code>，或让 Claude 登记。</p>'}
   <p class="mut small">知识库目录：${esc(d.root)}　·　<a href="#/d/使用说明">使用说明</a></p>`;
   app.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{ovFilter=b.dataset.f;try{localStorage.setItem('kb.ovFilter',ovFilter)}catch(_){}overview()});
-  loadStats();loadStw();
+  loadStats();loadStw();loadOnb();
   if($('#ovAdd'))$('#ovAdd').onclick=()=>addDlg();
   $('#ovTask').onclick=()=>addDlg('task');
   app.querySelectorAll('[data-tnav]').forEach(a=>a.onclick=()=>taskNav(a.dataset.tnav,!!a.dataset.show));
   app.querySelectorAll('[data-pnav]').forEach(a=>a.onclick=e=>{e.preventDefault();e.stopPropagation();taskNav(a.dataset.pnav,!!a.dataset.show)});
   const g=$('#ibGo');if(g)g.onclick=async()=>{try{const r=await post('/api/inbox',{period:$('#ibP').value});toast(r.msg);render()}catch(e){toast(e.message)}};
 }
+
+// 问管家：右下角常驻，说话代替大部分表单；它用知识库工具查和改，红线动作只告诉你去哪点
+let askTimer=null;
+function askOpen(o){$('#askPanel').hidden=!o;$('#askFab').hidden=o;if(o){askLoad();setTimeout(()=>$('#askIn').focus(),50)}}
+async function askLoad(){
+  let r;try{r=await api('/api/chat')}catch(e){return}
+  const box=$('#askLog'),hint=`<div class="mut small">把东西交给我就行：需求、日志、Bug、账号、文件……我归到对应的地方，接着往下推（资料齐了出方案、日志建事项、Bug 只读分析）；要动代码的给你一个确认按钮，拍板、开工、验收在页面上点。${(r['规矩']||[]).length?`<br>记着的规矩：${r['规矩'].map(x=>esc(x['内容'])).join('；')}`:''}</div>`;
+  box.innerHTML=hint+r['对话'].map(x=>`<div class="aq">${esc(x['问'])}${(x['文件']||[]).length?`<div class="small mut">📎 ${x['文件'].map(esc).join('、')}</div>`:''}</div>`+(x['状态']==='思考中'?'<div class="aa mut">思考中…（会用知识库工具查，可能要一两分钟）</div>'
+    :`<div class="aa ${x['状态']==='出错'?'err':''}">${md(x['答']||'').html.replace(/href="(#[^"]*)" target="_blank" rel="noopener"/g,'href="$1"')}${x['提议']?propHtml(x['提议'],x['编号']):''}</div>`)).join('');
+  bindProp(box,'/api/chat/confirm');
+  box.scrollTop=box.scrollHeight;$('#askSt').textContent=r['思考中']?'思考中…':'';
+  clearTimeout(askTimer);if(r['思考中']&&!$('#askPanel').hidden)askTimer=setTimeout(askLoad,3000);
+}
+// 推动卡片：只问工程和分支（默认值选好了），点「▶ 推动」= 你本人批准
+function propHtml(p,id){
+  if(p['已确认'])return `<div class="prop">✓ 已推动「${esc(p['事项'])}」· 工程 <span class="mono">${esc((p['工程']||'').replace(/^\/Users\/[^/]+/,'~'))}</span>${p['分支']?' · 分支 '+esc(p['分支']):''}<div class="small mut">${esc((p['结果']||'').split('\n')[0])}</div><a href="#/p/${enc(p['事项'])}">看进展</a></div>`;
+  const rs=p['仓库']||[];
+  return `<div class="prop" data-prop="${esc(id)}"><div class="small mut">${esc(p['说明']||'')}</div>
+    <label class="small">工程${rs.length?`<select data-prepo>${rs.map(r=>`<option value="${esc(r['路径'])}" data-br="${esc(r['分支']||'')}" ${r['路径']===p['默认仓库']?'selected':''}>${esc(r['名称'])} · ${esc(r['路径'].replace(/^\/Users\/[^/]+/,'~'))}</option>`).join('')}</select>`
+      :`<input data-prepo placeholder="工程目录，如 ~/AndroidStudioProjects/app" value="${esc(p['默认仓库']||'')}">`}</label>
+    <label class="small">分支<input data-pbr value="${esc(p['默认分支']||'')}" placeholder="不填 = 用工程现在的分支"></label>
+    <button class="pri" data-pgo="${esc(id)}">▶ 推动（${(p['条目']||[]).length} 条）</button></div>`;
+}
+function bindProp(root,url,extra){
+  root.querySelectorAll('[data-prop]').forEach(box=>{const sel=box.querySelector('select[data-prepo]'),br=box.querySelector('[data-pbr]');
+    if(sel)sel.onchange=()=>{br.value=sel.selectedOptions[0].dataset.br||''};
+    box.querySelector('[data-pgo]').onclick=async e=>{const b=e.target;b.disabled=true;b.textContent='推动中…';
+      try{toast((await post(url,{id:box.dataset.prop,repo:box.querySelector('[data-prepo]').value.trim(),branch:br.value.trim(),...(extra||{})})).msg.split('\n')[0])}catch(err){toast(err.message);b.disabled=false;b.textContent='▶ 推动'}
+      askLoad();if(typeof loadStw==='function')loadStw()}})}
+let askStaged=[];
+function askFilesShow(){$('#askFiles').innerHTML=askStaged.map((f,i)=>`<span>${esc(f.name)} <a data-afx="${i}">✕</a></span>`).join('');
+  $('#askFiles').querySelectorAll('[data-afx]').forEach(a=>a.onclick=()=>{askStaged.splice(+a.dataset.afx,1);askFilesShow()})}
+async function askStage(fs){for(const f of fs){try{const r=await fetch('/api/chat/stage',{method:'POST',headers:{'X-Filename':encodeURIComponent(f.name)},body:f});
+  const j=await r.json();if(!r.ok)throw new Error(j.error||'上传失败');askStaged.push({id:j.id,name:f.name})}catch(e){toast(f.name+'：'+e.message)}}askFilesShow()}
+async function askSend(){const v=$('#askIn').value.trim();if(!v&&!askStaged.length)return;
+  try{await post('/api/chat/ask',{text:v,files:askStaged.map(f=>f.id),page:decodeURIComponent(location.hash.slice(1)||'/')});$('#askIn').value='';askStaged=[];askFilesShow();askLoad()}catch(e){toast(e.message)}}
+$('#askFile').onchange=e=>{askStage([...e.target.files]);e.target.value=''};
+const ap=$('#askPanel');ap.addEventListener('dragover',e=>{e.preventDefault();ap.classList.add('drop')});ap.addEventListener('dragleave',()=>ap.classList.remove('drop'));
+ap.addEventListener('drop',e=>{e.preventDefault();ap.classList.remove('drop');if(e.dataTransfer.files.length)askStage([...e.dataTransfer.files])});
+$('#askIn').addEventListener('paste',e=>{const fs=[...(e.clipboardData||{}).files||[]];if(fs.length){e.preventDefault();askStage(fs)}});
+$('#askFab').onclick=()=>askOpen(true);$('#askX').onclick=()=>askOpen(false);$('#askGo').onclick=askSend;
+$('#askIn').onkeydown=e=>{if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)){e.preventDefault();askSend()}};
+$('#askNewP').onclick=()=>addDlg('new');
+$('#askClr').onclick=async()=>{try{toast((await post('/api/chat/clear',{})).msg)}catch(e){toast(e.message)}askLoad()};
+$('#askLog').addEventListener('click',e=>{const a=e.target.closest('a[href^="#"]');if(a&&innerWidth<900)askOpen(false)});
 
 // 管家：明确的事自己做（只读 / 能重做的），要你批准的出卡片，不明确的只问一个问题
 const STW_TAG={问你:'❓ 问你',待你:'👉 待你处理',建议:'💡 建议'};
@@ -434,14 +506,42 @@ function stwHtml(v){
   const head=`<div class="sh"><h2>🤖 管家</h2><span class="mut small">${s['开启']?`自主度「${esc(s['自主度'])}」 · 今天自动做了 ${v['今日已做']}/${s['每日上限']} 件`:'已关闭：只看不做'}${v['上次']?` · 上次巡检 ${esc(v['上次'].slice(11))}`:''}</span>
     <button class="small" id="stwTick" title="现在就巡检一轮：明确的事会自动做">立即巡检</button><a class="small src" href="#/settings">管家设置</a></div>`;
   const card=c=>`<div class="stc t-${esc(c['类型'])}"><span class="small mut">${STW_TAG[c['类型']]||esc(c['类型'])}</span><div class="tt">${esc(c['标题'])}</div>
-    ${c['说明']?`<div class="ds">${esc(c['说明'])}</div>`:''}${c['为什么']?`<div class="wy">${esc(c['为什么'])}</div>`:''}
-    <div class="ac">${c['选项']?`<select data-sopt="${esc(c.id)}">${c['选项'].map(o=>`<option value="${esc(o['值'])}">${esc(o['标签'])}</option>`).join('')}</select><button class="pri" data-sans="${esc(c.id)}">就用这个</button>`
-      :(c['动作']==='run'||c['动作']==='ignore')?`<button class="pri" data-sans="${esc(c.id)}">${esc(c['按钮']||'现在就做')}</button>${c['链接']?`<a class="small" href="${esc(c['链接'])}">看看</a>`:''}`
+    ${c['说明']?`<div class="ds">${esc(c['说明'])}</div>`:''}${c['为什么']?`<div class="wy">${esc(c['为什么'])}</div>`:''}${c['提议']?propHtml(c['提议'],c.id):''}
+    <div class="ac">${c['提议']?`<a class="small" href="${esc(c['链接']||'#/')}">看事项</a>`:c['选项']?`<select data-sopt="${esc(c.id)}">${c['选项'].map(o=>`<option value="${esc(o['值'])}">${esc(o['标签'])}</option>`).join('')}</select><button class="pri" data-sans="${esc(c.id)}">就用这个</button>`
+      :(c['动作']==='run'||c['动作']==='ignore'||c['动作']==='upgrade')?`<button class="pri" data-sans="${esc(c.id)}">${esc(c['按钮']||'现在就做')}</button>${c['链接']?`<a class="small" href="${esc(c['链接'])}">看看</a>`:''}`
       :c['链接']?`<a class="btn" href="${esc(c['链接'])}"><button class="pri">${esc(c['按钮']||'去处理')}</button></a>`:''}
       <span class="no" data-sno="${esc(c.id)}" title="这件事先不提；情况有变化会再出现">不用了</span></div></div>`;
   return head+(v['日报']?`<div class="brief">📰 今日日报：${esc(v['日报']['内容'])}</div>`:'')
     +(cs.length?`<div class="stcards">${cs.map(card).join('')}</div>`:'<p class="mut small" style="margin:0">✓ 现在没有要你处理的事。</p>')
     +(did.length?`<details><summary>管家最近自动做了 ${did.length} 件</summary><ul>${did.map(r=>`<li><span class="mut">${esc(r['时间'].slice(5))}</span> ${esc(STW_ACT[r['动作']]||r['动作'])}：${esc([].concat(r['对象']).join('、'))} · ${esc(r['结果'])}</li>`).join('')}</ul></details>`:'');
+}
+// 首次引导：引擎能用 → 勾选本机仓库 → 放进第一个需求（三步都好了或点「收起」就不再出现）
+let onbScan=null;
+async function loadOnb(){
+  const el=$('#ovOnb');if(!el)return;let o;try{o=await api('/api/onboard')}catch(_){return}
+  if(o['完成']||o['收起']){el.innerHTML='';el.className='';return}
+  el.className='onb';const e=o['引擎'],ok=o['步骤'];
+  const st=(i,title,body)=>`<div class="os ${ok[i]?'ok':''}"><span class="num">${ok[i]?'✓':i+1}</span><div><b>${title}</b><div class="small" style="margin-top:3px">${body}</div></div></div>`;
+  const s1=!e['已安装']?`没找到 ${esc(e['名称']||'AI 引擎')}。先安装 <a href="https://claude.com/claude-code" target="_blank" rel="noopener">Claude Code</a> 并登录，装好后刷新这一页；用别的 AI 到「⚙ 设置 → AI 引擎」里选。`
+    :e['已接入']===false?`${esc(e['名称'])} 已安装，但还没接入知识库（接入后它才能读资料、在网页上问你）。 ${e['能接入']?'<button class="pri small" id="onbLink">一键接入</button>':'到「⚙ 设置 → AI 引擎」按说明接入。'}`
+    :`${esc(e['名称'])} ${esc(e['版本']||'')} 能用了。`;
+  const rows=onbScan?onbScan.filter(r=>!r['已登记']):null;
+  const s2=ok[1]&&!onbScan?`已有 ${o['仓库数']} 个代码仓库可选。<a id="onbScan">再扫描一次</a>`
+    :!rows?`<button class="pri small" id="onbScan">扫描本机代码仓库</button> <span class="mut">在家目录下找 git / svn 仓库，认出是哪个端，你勾选就行。</span>`
+    :rows.length?`<div class="rl">${rows.map(r=>`<label><input type="checkbox" data-onbr="${esc(r['路径'])}" ${r['端'].length?'checked':''}><b>${esc(r['名称'])}</b> <span class="badge">${esc(r['端'].join('/')||'未识别')}</span> <span class="mut mono">${esc(r['路径'].replace(/^\/Users\/[^/]+/,'~'))}</span></label>`).join('')}</div>
+      <button class="pri small" id="onbAdd">登记勾选的仓库</button> <span class="mut">没找到的仓库：终端 <code>kb repo &lt;路径&gt;</code>，或以后在每一期「全栈」里直接填路径。</span>`
+    :'没找到新的仓库。仓库在别处的话：终端 <code>kb repo &lt;路径&gt;</code>，或以后在每一期「全栈」里直接填路径。';
+  const s3=ok[2]?`已有 ${o['期数']} 期。`:`<button class="pri small" id="onbNew">＋ 放进第一个需求</button> <span class="mut">粘贴需求链接、文档或产品说的话，AI 自动建期、归好类；之后每一期顶部会告诉你下一步做什么。</span>
+    <div style="margin-top:6px"><button class="small" id="onbDemo">先看一个示例</button> <span class="mut">建一个「连续签到奖励」示例期（服务端 + Android 两个小示例仓库），跟着点一遍出方案 → 拍板 → 开发 → 验收，看完删掉。</span></div>`;
+  el.innerHTML=`<div class="sh"><h2>👋 三步上手</h2><span class="mut small">做完就能让 AI 按流程干活</span><a class="small" id="onbHide">收起</a></div>
+    ${st(0,'AI 引擎',s1)}${st(1,'代码仓库',s2)}${st(2,'第一个需求',s3)}`;
+  const go=async(u,b)=>{try{toast((await post(u,b)).msg)}catch(err){toast(err.message)}loadOnb()};
+  if($('#onbLink'))$('#onbLink').onclick=()=>go('/api/engine/link',{id:e.id});
+  if($('#onbScan'))$('#onbScan').onclick=async()=>{$('#onbScan').textContent='扫描中…';try{onbScan=(await api('/api/onboard/scan')).items}catch(err){toast(err.message)}loadOnb()};
+  if($('#onbAdd'))$('#onbAdd').onclick=()=>{const ps=[...el.querySelectorAll('[data-onbr]:checked')].map(x=>x.dataset.onbr);if(!ps.length)return toast('先勾选仓库');onbScan=null;go('/api/onboard/repos',{paths:ps})};
+  if($('#onbNew'))$('#onbNew').onclick=()=>askOpen(true);
+  if($('#onbDemo'))$('#onbDemo').onclick=async()=>{try{const r=await post('/api/demo',{});toast(r.msg);location.hash='#/p/'+enc(r.name)}catch(err){toast(err.message)}};
+  $('#onbHide').onclick=()=>go('/api/onboard/hide',{hide:true});
 }
 async function loadStw(){
   try{ovStw=await api('/api/steward')}catch(e){ovStw=null}
@@ -450,6 +550,7 @@ async function loadStw(){
   const t=$('#stwTick');if(t)t.onclick=()=>{t.disabled=true;t.textContent='巡检中…';go('/api/steward/tick',{})};
   el.querySelectorAll('[data-sans]').forEach(b=>b.onclick=()=>{if(/忽略/.test(b.textContent)&&!confirm('忽略这些陈旧 Bug？只在知识库标记，不改 Bug 平台，随时能在 Bug 页取消。'))return;const s=el.querySelector(`[data-sopt="${CSS.escape(b.dataset.sans)}"]`);b.disabled=true;go('/api/steward/answer',{id:b.dataset.sans,value:s?s.value:''})});
   el.querySelectorAll('[data-sno]').forEach(b=>b.onclick=()=>go('/api/steward/dismiss',{id:b.dataset.sno}));
+  bindProp(el,'/api/steward/answer');
 }
 
 // 工作统计：数由「统计」插件算（⚙ 设置 → 插件 挂载「工作统计」）；没挂就不显示
@@ -782,7 +883,7 @@ function anrNewDlg(tasks,mapOnly){
       <label class="small mut">代码仓库 <select id="anRp"><option value="">— 开始处理时再选 —</option></select></label></div>
       <div class="small mut" id="anRpH" hidden>一次粘贴的几段日志都归到这一个事项；建好后到事项页点「▶ 开始开发」</div>`}
     ${mapBox}
-    ${mapOnly?'':'<label>备注（可空）<input type="text" id="anN"></label>'}
+    ${mapOnly?'':'<label>备注（可空）<input type="text" id="anN" placeholder="如：用户反馈进房卡顿，版本 5.2.1，小米 13"></label>'}
     <div class="row"><button class="pri" id="anGo">${mapOnly?'归档':'建问题'}</button><span class="mut small">${mapOnly?'归档后会用它还原这个版本的样本；不写版本时存成「未标版本-时间」，给样本补上这个版本名即可还原':'认得出堆栈的按签名合并到已有问题、累计次数；版本、来源都可空，带 mapping 又没写版本时先从日志里认，认不出就和这次的日志共用一个版本名'}</span></div></div>`);
   if($('#anK'))$('#anK').onchange=async()=>{const nw=$('#anK').value==='＋新建';$('#anTk').hidden=!nw;$('#anRpH').hidden=!nw;
     if(nw&&$('#anRp').options.length<2){try{const r=await api('/api/repos/choices');
@@ -895,6 +996,13 @@ function anrDlg(id,tasks){
     try{const r=await post('/api/anr/delete',{sample:a.dataset.adel});toast(r.msg);dlg.close();render()}catch(e){toast(e.message)}});
 }
 
+// 每一期顶部：走到哪一步、下一步谁做什么（后端 period_guide 算）
+function guideHtml(g){
+  const n=g['下一步'];
+  return `<div class="steps">${g['步骤'].map(s=>`<div class="step ${s['状态']==='done'?'done':s['状态']==='cur'?'cur':''}">${s['状态']==='done'?'✓ ':''}${esc(s['名称'])}</div>`).join('')}</div>
+  <div class="gnext">${n['谁']?`<span class="who w-${esc(n['谁'])}">${n['谁']==='你'?'👉 该你了':'🤖 AI 在做'}</span>`:''}<div class="tx"><b>${esc(n['文字'])}</b>${n['说明']?`<div>${esc(n['说明'])}</div>`:''}</div>
+    ${n['按钮']?`<button class="${n['谁']==='你'?'pri':''}" id="gGo" data-to="${esc(n['去']||'')}">${esc(n['按钮'])}</button>`:''}</div>`;
+}
 async function period(name){
   const d=await api('/api/period?name='+enc(name)), m=d.meta;
   if(!periodNames.length){try{sideNav(await api('/api/overview'))}catch(_){}}
@@ -949,7 +1057,7 @@ async function period(name){
         ${m['开发仓库']?`<span>仓库 <span class="mono">${esc(m['开发仓库'].replace(/^\/Users\/[^/]+/,'~'))}</span></span>`:''}
         <span>关联仓库 ${esc((m['关联仓库']||[]).join('、')||'无')}</span><span class="mono" title="这一期的资料目录">${esc(d.dir.replace(/^\/Users\/[^/]+/,'~'))}</span></div></div>
     <div class="row"><span class="pview" title="分栏：按分类切换；整页：所有内容一页看完，按流程先后排，正在进行的放最上面"><button data-pv="tab" class="${whole?'':'on'}">▤ 分栏</button><button data-pv="whole" class="${whole?'on':''}">☰ 整页</button></span><label class="small mut" for="stSel">状态</label><select id="stSel">${[...new Set([m['状态'],'收集中','开发中','已完成','已暂停'])].map(s=>`<option ${s===m['状态']?'selected':''}>${s}</option>`).join('')}</select><button id="fixLink" title="设计稿、文档地址给错了：所有地方一起换成正确链接">✎ 更正链接</button><button class="danger" id="delP" title="没用的${isTask?'事项':'期'}：从知识库里整个删掉">🗑 删除</button></div></div>
-    <div class="steps">${steps}</div>${notice}
+    ${d.guide?guideHtml(d.guide):`<div class="steps">${steps}</div>${notice}`}
     <div class="card2 talk"><div class="bd">
       <div id="sessBar">${devCache.name===d.name?devCache.bar||'':''}</div>
       <textarea id="tkMsg" rows="2" placeholder="跟这一期说：有会话在跑就补充给它；没有就按内容推动解决（后续发现的问题、需求扩展）。Cmd+Enter 发送">${esc(drafts['tk:'+d.name]||'')}</textarea>
@@ -978,6 +1086,8 @@ async function period(name){
   app.querySelectorAll('[data-pv]').forEach(b=>b.onclick=()=>{pview=b.dataset.pv;try{localStorage.setItem('kb.pview',pview)}catch(_){}render()});
   if(!whole)app.querySelectorAll('[data-tab]').forEach(a=>a.onclick=()=>{ptabs[d.name]=a.dataset.tab;try{localStorage.setItem('kb.ptabs',JSON.stringify(ptabs))}catch(_){}
     app.querySelectorAll('[data-tab]').forEach(x=>x.classList.toggle('on',x===a));app.querySelectorAll('[data-pane]').forEach(x=>x.hidden=x.dataset.pane!==a.dataset.tab)});
+  const gb=$('#gGo');if(gb)gb.onclick=()=>{const k=(gb.dataset.to||'').replace('tab:','');if(!k)return;
+    if(whole){const p=app.querySelector(`[data-pane="${k}"]`);if(p)p.scrollIntoView({behavior:'smooth',block:'start'})}else{const a=app.querySelector(`[data-tab="${k}"]`);if(a)a.click()}};
   devBox(d.name);talkBind(d.name);buildBox(d.name);stackBox(d.name);
   bindBugs(app);
   app.querySelectorAll('[data-read]').forEach(a=>a.onclick=()=>a.dataset.dir?toast('目录：请在 Finder 或让 Claude 查看'):readFile(a.dataset.read));
@@ -1112,7 +1222,7 @@ function noteForm(d,n){
       <label style="flex:1">类型<select id="nfK">${opt(d.noteKinds,n['类型'],'自动判断')}</select></label></div>
     <label>内容<textarea id="nfT" rows="6" placeholder="原样粘贴，如：产品：连续签到满 7 天弹奖励弹窗，奖励金额后台可配">${esc(n['内容']||'')}</textarea></label>
     <label>链接（可空）<input type="text" id="nfU" value="${esc(n['链接']||'')}" placeholder="https://…"></label>
-    <div class="row"><label style="flex:1">标题（可空）<input type="text" id="nfN" value="${esc(n['标题']||'')}"></label>
+    <div class="row"><label style="flex:1">标题（可空）<input type="text" id="nfN" value="${esc(n['标题']||'')}" placeholder="不填就用内容的第一行"></label>
       <label style="flex:1">来自（可空）<input type="text" id="nfF" value="${esc(n['来自']||'')}" placeholder="如：产品 小王 / 服务端组"></label></div>
     <div class="row"><button class="pri" id="nfGo">保存</button><span class="mut small">⌘ + 回车 保存</span></div></div>`);
   const go=async()=>{const b={period:d.name,id:n['编号']||'',category:$('#nfC').value,kind:$('#nfK').value,
@@ -1152,7 +1262,7 @@ async function addDlg(tab){
   $('#nGo').onclick=async()=>{try{const n=$('#nN').value.trim();await post('/api/new',{name:n,summary:$('#nS').value});dlg.close();location.hash='#/p/'+enc(n)}catch(e){toast(e.message)}};
   $('#nN').onkeydown=e=>{if(e.key==='Enter')$('#nGo').click()};
   const go=async()=>{const t=$('#adT').value.trim();if(!t)return toast('请粘贴要添加的内容');
-    try{const r=await post('/api/add',{text:t,period:$('#adP').value});toast(r.msg);$('#adT').value='';addList()}catch(e){toast(e.message)}};
+    try{const p=$('#adP').value;await post('/api/chat/ask',{text:(p?`放进「${p}」：`:'')+t,page:'添加'});$('#adT').value='';dlg.close();askOpen(true)}catch(e){toast(e.message)}};
   $('#adGo').onclick=go;$('#adT').onkeydown=e=>{if(e.key==='Enter'&&(e.metaKey||e.ctrlKey))go()};
   show(tab||'add');addList();
 }
@@ -1360,7 +1470,7 @@ async function buildBox(name,fresh){
       ${j['错误']?`<div class="small" style="color:var(--warn)">${esc(j['错误'])}</div>`:j['构建'].length?`<div class="tw"><table><tr><th style="width:60px">构建</th><th style="width:80px">结果</th><th style="width:110px">版本</th><th style="width:130px">时间</th><th style="width:110px">提交</th><th>产物</th><th style="width:140px">这个包上的 Bug</th></tr>${j['构建'].map(row).join('')}</table></div>`:'<div class="mut small">还没有构建</div>'}</div>`).join('')
       :`<div class="mut small">没匹配到构建任务（任务名里要含分支名）。点「改对应任务」填任务名或地址。</div>`}`;
   $('#bdFresh').onclick=()=>buildBox(name,true);
-  $('#bdEdit').onclick=()=>{openDlg('这一期对应的构建任务',`<div class="form"><label>任务名或地址（可多个，换行隔开；留空 = 按分支重新自动匹配）<textarea id="bdJ" rows="3" class="mono">${esc(v['任务'].map(j=>j['地址']||j['名称']).join('\n'))}</textarea></label>
+  $('#bdEdit').onclick=()=>{openDlg('这一期对应的构建任务',`<div class="form"><label>任务名或地址（可多个，换行隔开；留空 = 按分支重新自动匹配）<textarea id="bdJ" rows="3" class="mono" placeholder="如：app_android_feature-x&#10;或 http://jenkins…/job/app_android_feature-x/">${esc(v['任务'].map(j=>j['地址']||j['名称']).join('\n'))}</textarea></label>
       <div class="row"><button class="pri" id="bdGo">保存</button></div></div>`);
     $('#bdGo').onclick=async()=>{try{const r=await post('/api/period/builds',{period:name,jobs:$('#bdJ').value});toast(r.msg);dlg.close();buildBox(name,true)}catch(e){toast(e.message)}}};
   box.querySelectorAll('[data-qr]').forEach(a=>a.onclick=()=>openDlg('扫码安装',`<img src="${esc(a.dataset.qr)}" style="max-width:280px;display:block;margin:auto">`));
@@ -1522,7 +1632,7 @@ async function devBox(name){
   const st=$('#dvStart');if(st)st.onclick=()=>{
     openDlg((s?'继续':'开始')+'开发',`<div class="form"><p style="margin:0">这等同于<b>你本人批准开发</b>：会在目标仓库后台启动 Claude Code（${'auto'} 权限），按这一期的开发流程开发；需要确认的地方会出现在本页并弹系统通知。</p>
       <label>输入期名确认<input type="text" id="dvC" placeholder="${esc(name)}"></label>
-      <label>备注（可空）<input type="text" id="dvN"></label>
+      <label>备注（可空）<input type="text" id="dvN" placeholder="如：先做接口和数据层，UI 等设计稿定了再做"></label>
       <label class="row" style="color:var(--fg)"><input type="checkbox" id="dvD" ${v['免打扰']?'checked':''}> 开启免打扰（不再询问，AI 自行决策）</label>
       <button class="pri" id="dvGo">▶ 确认开始</button></div>`);
     $('#dvGo').onclick=async()=>{const b=$('#dvGo');b.disabled=true;b.textContent='启动中…';
@@ -1549,7 +1659,7 @@ async function devBox(name){
       <label class="row" style="color:var(--fg)"><input type="radio" name="rtS" value="未通过" checked> 只测上次没通过的（BLOCKED / FAIL / 未验证）</label>
       <label class="row" style="color:var(--fg)"><input type="radio" name="rtS" value="全部"> 全部重新测</label>
       <label>需要几台手机<span class="row"><input type="number" id="rtN" min="1" max="10" value="${need}" style="width:80px"><span class="mut small">现在空闲 ${freeN} 台${phones?'':'（本机找不到 adb）'}</span></span></label>
-      <label>备注（可空，如「已接好 3 台手机，账号已重新登录」）<input type="text" id="rtNote"></label>
+      <label>备注（可空，如「已接好 3 台手机，账号已重新登录」）<input type="text" id="rtNote" placeholder="如：已接好 3 台手机，测试账号已重新登录"></label>
       <div class="row"><button class="pri" id="rtGo">▶ 现在复测</button><button id="rtAuto">⏰ 手机够了自动复测</button></div>
       <p class="small mut" style="margin:0">「手机够了自动复测」：每分钟检查一次，空闲手机达到台数就自动开始并弹通知（只触发一次）。</p></div>`);
     const opt=()=>({scope:($('#dlgB').querySelector('input[name=rtS]:checked')||{}).value||'未通过',phones:+$('#rtN').value||1});
@@ -1789,7 +1899,7 @@ function plDlg(d,p,mount){
   const field=c=>{const v=p['配置'][c['键']]||'', id='plc_'+c['键'];
     const inp=c['类型']==='base'?`<select data-pc="${esc(c['键'])}"><option value="">（不选）</option>${(d.baseEntries||[]).map(b=>`<option value="${esc(b['编号'])}" ${b['编号']===v?'selected':''}>${esc(b['编号']+' '+b['名称'])}</option>`).join('')}</select>`
       :(c['类型']||'').startsWith('select:')?`<select data-pc="${esc(c['键'])}">${c['类型'].slice(7).split('|').map(o=>`<option ${o===v?'selected':''}>${esc(o)}</option>`).join('')}</select>`
-      :`<input type="text" data-pc="${esc(c['键'])}" value="${esc(v)}">`;
+      :`<input type="text" data-pc="${esc(c['键'])}" value="${esc(v)}" placeholder="${esc(c['示例']?'如：'+c['示例']:c['默认']?'默认 '+c['默认']:'')}">`;
     return `<label>${esc(c['标题'])}${inp}${c['说明']?`<span class="small mut">${esc(c['说明'])}</span>`:''}</label>`};
   openDlg(`${mount?'挂载':'设置'}插件 · ${p['名称']}`,`<div class="form"><div class="small mut">${esc(p['说明']||'')}</div>
     ${p['工具']?`<div class="small"><b>按需调用</b>　<span class="mut">不挂时机：在对话里把${esc(p['参数']||'参数')}给 Claude（它用 kb_plugin_call 调用），或终端 <code>kb plugin call ${esc(p.id)} …</code></span></div>`:`<div><b class="small">在什么时候运行</b>${ev.map(e=>`<label class="small" style="display:block;margin-top:4px"><input type="checkbox" data-pe="${esc(e)}" ${on.has(e)?'checked':''}> <b>${esc(e)}</b>　<span class="mut">${esc(d.pluginEvents[e])}</span></label>`).join('')}</div>`}
@@ -1827,6 +1937,7 @@ async function plRunDlg(d,p){
       poll()}
     catch(e){toast(e.message);b.disabled=false;b.textContent='运行'}};
 }
+let setAdv=false;try{setAdv=!!localStorage.getItem('kb.setAdv')}catch(_){}
 async function settingsPage(){
   const d=await api('/api/settings');
   const card=f=>`<div class="bcard"><div class="row" style="justify-content:space-between"><b>${esc(f['名称'])}</b>
@@ -1861,6 +1972,13 @@ async function settingsPage(){
   let sw=null;try{sw=await api('/api/steward')}catch(_){}
   const sws=sw?sw['设置']:null;
   app.innerHTML=`<h1>⚙ 设置</h1>
+    ${(()=>{const de=d.engines.find(e=>e['默认'])||{},es=de['状态']||{};
+      return `<h2>常用</h2><div class="bcard"><div class="row" style="gap:10px;flex-wrap:wrap;margin:2px 0">
+        <b style="width:96px">AI 引擎</b><select id="smEng">${d.engines.map(e=>`<option value="${esc(e.id)}" ${e['默认']?'selected':''}>${esc(e['名称'])}</option>`).join('')}</select>
+        <span class="small">${es['已安装']?'✅ 已安装'+(es['已接入']===true?' · ✅ 已接入知识库':es['已接入']===false?' · ⚠ 还没接入知识库（到高级设置里点「接入知识库」）':''):'⚪ 本机没装，选一个装了的，或装好后刷新'}</span></div>
+        <div class="small mut" style="margin:0 0 8px 106px">后台干活用的编程 AI：出方案、开发、审查、Bug 分析都默认用它。想让不同的活用不同的 AI，打开下面的高级设置。</div>
+        <div class="row" style="gap:10px;flex-wrap:wrap;margin:2px 0"><b style="width:96px">开发流程</b><select id="smFlow">${d.flows.map(f=>`<option value="${esc(f.id)}" ${f['默认']?'selected':''}>${esc(f['名称'])}</option>`).join('')}</select></div>
+        <div class="small mut" style="margin:0 0 4px 106px">AI 开发时按什么步骤走。不知道选哪个就用「通用」；团队有自己的流程命令或技能，到高级设置里「从命令 / 技能添加」。</div></div>`})()}
     ${sw?`<h2>🤖 管家</h2>
     <p class="mut">管家每 5 分钟巡检一次：<b>明确又能重做的事自己做</b>（下面勾选的）；<b>你点了就等于批准的</b>（拍板、开工、验收、推动、修复、svn 提交）只提醒你，从不代点；<b>拿不准的</b>只问你一个问题。每天早上 8 点后出一份日报。</p>
     <div class="bcard"><div class="row" style="gap:16px;flex-wrap:wrap">
@@ -1870,7 +1988,12 @@ async function settingsPage(){
       <label title="更早的老 Bug 不自动分析（省 token）；你打回的照样重新分析">只自动分析最近 <input type="number" id="swNd" min="1" max="60" value="${sws['新Bug天数']}" style="width:60px"> 天新建的 Bug</label></div>
       <div class="small mut" style="margin:6px 0">保守 = 只建议、都等你点「现在就做」；标准 = 勾选的动作自动做；放手 = 同标准（以后会把更多动作放进来）。</div>
       ${sw['动作'].map(a=>`<div style="margin:4px 0"><label><input type="checkbox" data-swa="${esc(a.id)}" ${a['开启']?'checked':''}> <b>${esc(a['名称'])}</b></label> <span class="small mut">${esc(a['说明'])}</span></div>`).join('')}
-      <div class="row" style="margin-top:8px"><button class="pri" id="swSave">保存</button></div></div>`:''}
+      <div class="row" style="margin-top:8px"><button class="pri" id="swSave">保存</button></div></div>
+    <div class="bcard" style="margin-top:10px"><b>管家规矩</b> <span class="small mut">你定的长期要求，附在每个后台 AI 会话（方案、开发、审查、Bug 分析、问管家）的提示词后面。在「🤖 问管家」里说「以后……」也会记到这里。</span>
+      ${(sw['规矩']||[]).map(r=>`<div class="row" style="margin:4px 0;gap:8px"><span style="flex:1">${esc(r['内容'])}</span><span class="small mut">${esc((r['时间']||'').slice(5))}</span><a class="small" data-rdel="${esc(r['编号'])}">删除</a></div>`).join('')||'<div class="small mut" style="margin:6px 0">还没有规矩。</div>'}
+      <div class="row" style="margin-top:6px;gap:8px"><input type="text" id="rlIn" style="flex:1" placeholder="如：Bug 分析结论先写复现步骤／审查不要因为代码风格打回／接口字段一律用小驼峰"><button id="rlAdd">记下</button></div></div>`:''}
+    <p style="margin:18px 0 6px"><a id="advTog">${setAdv?'▾ 收起高级设置':'▸ 高级设置：引擎详情、按角色分配 AI、自定义开发流程'}</a></p>
+    <div id="advBox" ${setAdv?'':'hidden'}>
     <div class="row" style="justify-content:space-between"><h2>AI 引擎</h2><button id="enNew">＋ 新建引擎</button></div>
     <p class="mut">后台干活用哪个编程 AI：开始开发、模糊添加、来源更新、生成流程。开发面板可以给每一期单独选，其余用默认引擎。
     引擎要<b>能无人值守运行</b>并<b>接入知识库</b>（用 kb_ask 等工具在网页上找你确认）。权限相关的启动参数决定 AI 能在仓库里做什么，内置预设只用常规权限模式，请按团队安全要求调整。</p>
@@ -1887,12 +2010,18 @@ async function settingsPage(){
     默认是「通用模板」；已有自己的流程命令（如 <code>/my-flow</code>）的，点<b>「从命令 / 技能添加」</b>选中它即可自动生成，不用写脚本；
     也可以复制「通用模板」手动改，用「导出 / 导入」在同事之间共享。
     每一期可以在开发面板单独选流程，不选就按仓库里的识别文件自动匹配，匹配不上用默认流程。详见 <a href="#/d/使用说明">使用说明</a>。</p>
-    <div class="bgrid">${d.flows.map(card).join('')}</div>
+    <div class="bgrid">${d.flows.map(card).join('')}</div></div>
     <div class="row" style="justify-content:space-between;margin-top:18px"><h2>插件</h2><button id="plAdd">＋ 添加插件目录</button></div>
     <p class="mut">插件不属于知识库本身（如公司定制的多语言拉取），挂载后在选定的时机自动运行：${Object.entries(d.pluginEvents).map(([k,v])=>`<b>${esc(k)}</b>（${esc(v)}）`).join('；')}。
     把插件文件夹（含 <code>plugin.json</code>）放进 <code>${esc(d.pluginDir.replace(/^\/Users\/[^/]+/,'~'))}</code>，或添加其他目录；运行失败会记成「需要你处理的问题」，不会拦住开发。详见 <a href="#/d/使用说明">使用说明</a>。</p>
     <div class="bgrid">${d.plugins.map(pcard).join('')||'<div class="mut">还没有插件</div>'}</div>`;
   const byId=id=>d.flows.find(f=>f.id===id),eById=id=>d.engines.find(e=>e.id===id),pById=id=>d.plugins.find(p=>p.id===id);
+  const rl=async b=>{try{toast((await post('/api/chat/rule',b)).msg.split('\n')[0])}catch(e){toast(e.message)}settingsPage()};
+  if($('#rlAdd'))$('#rlAdd').onclick=()=>{const v=$('#rlIn').value.trim();if(v)rl({text:v})};
+  app.querySelectorAll('[data-rdel]').forEach(a=>a.onclick=()=>{if(confirm('删掉这条规矩？'))rl({delete:a.dataset.rdel})});
+  $('#advTog').onclick=()=>{setAdv=!setAdv;try{localStorage.setItem('kb.setAdv',setAdv?'1':'')}catch(_){}settingsPage()};
+  $('#smEng').onchange=async e=>{try{toast((await post('/api/engine/default',{id:e.target.value})).msg)}catch(err){toast(err.message)}settingsPage()};
+  $('#smFlow').onchange=async e=>{try{toast((await post('/api/settings/default',{id:e.target.value})).msg)}catch(err){toast(err.message)}settingsPage()};
   if($('#swSave'))$('#swSave').onclick=async()=>{const acts={};app.querySelectorAll('[data-swa]').forEach(x=>acts[x.dataset.swa]=x.checked);
     try{toast((await post('/api/steward/settings',{on:$('#swOn').checked,level:(app.querySelector('[name=swLv]:checked')||{}).value,limit:$('#swLim').value,new_days:$('#swNd').value,actions:acts})).msg)}catch(e){toast(e.message)}};
   const plSave=async(p,enabled,events,config)=>{try{toast((await post('/api/plugin',{id:p.id,enabled,events,config})).msg);render()}catch(e){toast(e.message)}};
@@ -2017,10 +2146,10 @@ async function basePage(){
     openDlg(e?'编辑 '+e['编号']:'新增基础信息',`<div class="form">
       <label>分类<select id="bC">${d.cats.map(c=>`<option ${e&&e['分类']===c?'selected':''}>${c}</option>`).join('')}</select></label>
       <label>名称<input type="text" id="bN" value="${esc(e?e['名称']:'')}" placeholder="如：测试账号（国内）/ 办公室 Wi-Fi / 抓包代理"></label>
-      <label>适用（产品 / 场景，可空）<input type="text" id="bS" value="${esc(e?e['适用']:'')}"></label>
+      <label>适用（产品 / 场景，可空）<input type="text" id="bS" value="${esc(e?e['适用']:'')}" placeholder="如：国内版 / 测试环境 / 所有产品"></label>
       <div><div class="small mut" style="margin-bottom:4px">字段（勾选「机密」的单独加密保存）</div><div id="bF" style="display:grid;gap:6px">${fs.map(row).join('')}</div>
         <a class="small" id="bFA" style="display:inline-block;margin-top:6px">＋ 添加字段</a></div>
-      <label>备注（可空，支持 Markdown）<textarea id="bR" rows="3">${esc(e?e['备注']:'')}</textarea></label>
+      <label>备注（可空，支持 Markdown）<textarea id="bR" rows="3" placeholder="如：用之前先连公司 VPN；密码每月 1 号更换">${esc(e?e['备注']:'')}</textarea></label>
       <div class="row"><button class="pri" id="bGo">保存</button>${e?'<button class="danger" id="bDel">删除这条</button>':''}</div></div>`);
     const bind=()=>{$('#bF').querySelectorAll('[data-del]').forEach(a=>a.onclick=()=>a.parentElement.remove());
       $('#bF').querySelectorAll('.fS').forEach(c=>c.onchange=()=>c.closest('.frow').querySelector('.fV').type=c.checked?'password':'text')};
@@ -2051,7 +2180,7 @@ async function render(){
   sideNav();
 }
 $('#sf').onsubmit=e=>{e.preventDefault();const q=$('#q').value.trim();if(q)location.hash='#/s/'+enc(q+'\u0001'+$('#scope').value)};
-$('#addBtn').onclick=()=>addDlg();
+$('#addBtn').onclick=()=>askOpen(true);   // 「＋ 添加」= 交给管家（新建一期 / 事项在总览和侧栏里）
 window.onhashchange=render;render();navRefresh();
 // 实时更新：服务端有变化才推送（SSE），只刷新对应部分；不再定时轮询
 let pagePending=false;

@@ -64,9 +64,16 @@ AI 拿不准的会在网页上问你；开了「免打扰」，它就按自己�
 需要 macOS 或 Linux、Python 3.9+、git，以及已登录的 [Claude Code](https://claude.com/claude-code)。
 
 ```sh
+curl -fsSL https://raw.githubusercontent.com/VcStrong/knowledge-base-public/main/install.sh | bash
+```
+
+装完自动打开浏览器，首页「👋 三步上手」带你走一遍：检测 AI 引擎 → 勾选本机代码仓库 → 放进第一个需求。不想自己准备，点「先看一个示例」；不会用就点右下角「🤖 问管家」。
+
+也可以手动装：
+
+```sh
 git clone https://github.com/VcStrong/knowledge-base-public.git ~/knowledge-base
 cd ~/knowledge-base && ./install.sh          # 装在服务器：./install.sh --host 0.0.0.0 --autostart
-kb web                                       # 打开网页工作台 http://127.0.0.1:11555
 ```
 
 远端部署、换电脑、升级、卸载见 [使用说明 · 安装和部署](使用说明.md#安装和部署)。

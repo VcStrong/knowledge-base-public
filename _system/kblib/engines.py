@@ -100,8 +100,15 @@ def engine_bin(e):
     return found
 
 
+def rules_text():
+    """管家规矩（你在「问管家」里说「以后……」记下的）：附在每个后台 AI 会话的提示词后面。"""
+    rs = [r.get('内容') for r in load_settings().get('管家规矩') or [] if isinstance(r, dict) and r.get('内容')]
+    return ('\n\n用户定的长期规矩（必须遵守）：\n' + '\n'.join(f'- {x}' for x in rs)) if rs else ''
+
+
 def engine_cmd(e, prompt, title='kb', resume_id=''):
     """拼出运行命令（参数逐个替换变量，不经过 shell）。"""
+    prompt = prompt + rules_text()
     args = e.get('续跑参数') if resume_id and e.get('续跑参数') else e.get('启动参数')
     v = {'提示词': prompt, '标题': title, '会话ID': resume_id}
     return [engine_bin(e)] + [re.sub(r'\{(提示词|标题|会话ID)\}', lambda mm: v[mm.group(1)], a) for a in args or []]
@@ -240,7 +247,8 @@ ROLES = [('方案', '全栈出方案：需求规格、设计对照、影响分�
          ('审查', '各端代码审查。建议和开发用不同的引擎，审查才独立'),
          ('Bug分析', 'Bug 只读分析'),
          ('Bug修复', 'Bug 修复'),
-         ('整理', '模糊添加、来源更新后的资料整理')]
+         ('整理', '模糊添加、来源更新后的资料整理'),
+         ('管家', '回答你在网页上「问管家」的问题，帮你查资料、改配置')]
 ROLE_ENDS = ('服务端', 'Web', 'iOS', 'Android', '鸿蒙')
 
 
@@ -304,11 +312,11 @@ def engine_popen(e, prompt, title, logf, cwd, resume_id='', env_extra=None, extr
                                 start_new_session=True, env=env)
 
 
-def engine_run(e, prompt, cwd, timeout=300):
+def engine_run(e, prompt, cwd, timeout=300, extra_args=None, title='kb·单次'):
     """前台跑一次，返回 (退出码, 解析出的结果)。"""
     env = {k: v for k, v in os.environ.items() if k not in _CLEAN_ENV}
     try:
-        r = subprocess.run(engine_cmd(e, prompt, 'kb·单次'), cwd=cwd, capture_output=True, text=True, timeout=timeout,
+        r = subprocess.run(engine_cmd(e, prompt, title) + list(extra_args or []), cwd=cwd, capture_output=True, text=True, errors='replace', timeout=timeout,
                            env=env, stdin=subprocess.DEVNULL)
     except subprocess.TimeoutExpired:
         raise KBError(f'{e["名称"]} {timeout // 60} 分钟没有返回')
