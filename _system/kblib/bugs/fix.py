@@ -1,5 +1,9 @@
 # From 大大王.DT
-"""Bug 修复：审核通过后的独立修复会话和修复队列；只在知识库标记。"""
+"""Bug 修复：审核通过后的独立修复会话和修复队列；只在知识库标记。
+
+git 仓库：修复会话每个 Bug 本地提交一次（不推送）。
+svn 工作副本：svn 一提交就进服务器，修复会话只改不提交，kb_bug_fixed 报这个 Bug 改了哪些文件（修复.待提交）；
+  你在 Bug 上点「⬆ 提交到 svn」才提交（bug_svn_commit，只在网页，不给 AI）。同一个工作副本有待提交的改动时，后面的修复先排队。"""
 import re
 import threading
 import time
@@ -9,6 +13,7 @@ from ..common import KBError, PERIODS, now, uuid_hex
 from ..periods import load_meta, log, period_dir, period_names
 from ..engines import engine_popen, role_engine
 from ..devprep import _git
+from .. import hosts
 from ..devsession import _alive, _dev_env
 from ..devices import dev_activity
 from ..bugs.index import ZT_DIR, _zt_recheck, an_skip, zt_load, zt_save
@@ -33,9 +38,17 @@ def _repo_busy(root):
     return ''
 
 
+def _is_svn(root):
+    rp = Path(root)
+    return (rp / '.svn').exists() and not (rp / '.git').exists()
+
+
 def _fx_prompt(root, branch, items):
+    svn = _is_svn(root)
     out = [f"""你是由知识库网页启动的【后台无人值守】Bug 修复会话。用户已在网页审核通过了下面每个 Bug 的分析，并点了「修复」（等同批准改代码）。终端里没有人，不要提问。
-代码仓库：{root}，分支 {branch}（已检出，工作区干净）。不要切换分支、不要 push、不要改和这些 Bug 无关的代码。不要改 Bug 平台（知识库从不回写）。
+代码仓库：{root}，分支 {branch}（已检出，工作区干净）。""" + (
+        '这是 svn 工作副本：不要 svn switch / update / revert，【不要 svn commit】（svn 一提交就进服务器，由用户在网页确认后提交）。' if svn else
+        '不要切换分支、不要 push。') + """不要改和这些 Bug 无关的代码。不要改 Bug 平台（知识库从不回写）。
 """]
     for e in items:
         a = e['分析']
@@ -55,8 +68,10 @@ def _fx_prompt(root, branch, items):
 1. kb_bug_get 实时拉取，确认 Bug 还要修（平台上已关闭、或内容跟分析时不一样了，就不改，直接 kb_bug_fixed 报告 done=false 并写明原因）。
 2. 按审核通过的修复思路改，改动尽量小；思路在代码里走不通时，不要自己换一套大改，kb_bug_fixed 报告 done=false 写明卡在哪。
 3. 编译（构建命令看仓库根目录的 AGENTS.md / README；安卓一般是 ./gradlew :模块:compileXxxJavaWithJavac 或 assembleXxx），有相关单测就跑。
-4. 只 git add 这次改的文件，提交一次，提交信息：「fix: Bug <编号> <一句话>」（仓库有提交规范就按规范，带上 Bug 编号）。
-5. kb_bug_fixed 标记：id、done=true、commits=[提交号]、note（改了什么、怎么验证的、还要人工确认什么）。
+""" + ("""4. 不提交。新文件 svn add、删文件 svn delete，让 svn status 能看到；记下这个 Bug 改了哪些文件。
+5. kb_bug_fixed 标记：id、done=true、files=[这个 Bug 改的文件，相对仓库根目录]、commits 留空、note（改了什么、怎么验证的、还要人工确认什么）。
+   几个 Bug 改了同一个文件也照实写，提交时会一起提交。""" if svn else """4. 只 git add 这次改的文件，提交一次，提交信息：「fix: Bug <编号> <一句话>」（仓库有提交规范就按规范，带上 Bug 编号）。
+5. kb_bug_fixed 标记：id、done=true、commits=[提交号]、note（改了什么、怎么验证的、还要人工确认什么）。""") + """
    要上手机验证的：kb_devices 看、kb_device_claim 申请，只在申请到的手机上装包测试，测完 kb_device_release；没有手机就在 note 里写「待真机验证」，不要卡住。
 全部处理完后结束，最后用中文回复每个 Bug 的结果。""")
     return '\n'.join(out)
@@ -186,6 +201,16 @@ def fix_queue_tick():
             block = wait = ''
             if not rp.is_dir():
                 block = f'仓库目录不存在：{root}'
+            elif _is_svn(root):
+                wait = _repo_busy(root) or ('本轮已在这个仓库起了修复会话' if str(rp.resolve()) in busy_now else '')
+                if not wait:
+                    cur = hosts.branch_of(root, 'svn')
+                    if branch and branch not in (cur, cur.rsplit('/', 1)[-1]):
+                        block = f'svn 工作副本当前在 {cur}，这些 Bug 要在 {branch} 上修：svn switch 过去后自动开始'
+                    elif hosts.svn_changes(root)[0]:
+                        pend = [e['编号'] for e in data['Bug'].values() if (e.get('修复') or {}).get('待提交') and (e['修复'].get('仓库') == root)]
+                        block = (f'Bug {"、".join(pend)} 修好了还没提交到 svn：在 Bug 上点「⬆ 提交到 svn」后自动开始' if pend else
+                                 'svn 工作副本有未提交的改动：提交或处理后自动开始（修复的改动要单独提交，不混进别的改动）')
             else:
                 wait = _repo_busy(root) or ('本轮已在这个仓库起了修复会话' if str(rp.resolve()) in busy_now else '')
                 if not wait:
@@ -202,7 +227,8 @@ def fix_queue_tick():
                     changed = True
             if not block and not wait:
                 busy_now.add(str(rp.resolve()))
-                starts.append((root, branch or _git(rp, 'branch', '--show-current').stdout.strip(), items[:FX_MAX_BUGS]))
+                starts.append((root, branch or (hosts.branch_of(root, 'svn') if _is_svn(root) else _git(rp, 'branch', '--show-current').stdout.strip()),
+                               items[:FX_MAX_BUGS]))
         if changed:
             zt_save(data)
         for root, branch, items in starts:
@@ -220,7 +246,7 @@ def _fx_start(root, branch, part, by='修复队列'):
     sid = datetime.now().strftime('%Y%m%d-%H%M%S-') + uuid_hex()[:4]
     (ZT_DIR / '分析会话').mkdir(parents=True, exist_ok=True)
     logf = ZT_DIR / '分析会话' / f'修复-{sid}.jsonl'
-    head = _git(rp, 'rev-parse', 'HEAD').stdout.strip()
+    head = hosts.head(root, 'svn') if _is_svn(root) else _git(rp, 'rev-parse', 'HEAD').stdout.strip()
     o = part[0].get('归属') or {}
     proc = engine_popen(eng, _fx_prompt(root, branch, part), f'kb·修复·Bug {"、".join(e["编号"] for e in part)}', logf, root,
                         env_extra=dict(_dev_env(o.get('名称') or 'Bug 修复', branch, root), KB_SESSION='an:' + sid))
@@ -255,8 +281,9 @@ def _fx_log(e, text):
             pass
 
 
-def bug_fixed(bid, done=True, commits=None, note='', by='Claude'):
-    """标记 Bug 修好了（或没修成）：只记在知识库，不改 Bug 平台。修复会话、对话里的 AI 或用户在网页上手动标记都用它。"""
+def bug_fixed(bid, done=True, commits=None, note='', by='Claude', files=None):
+    """标记 Bug 修好了（或没修成）：只记在知识库，不改 Bug 平台。修复会话、对话里的 AI 或用户在网页上手动标记都用它。
+    svn 仓库：files = 这个 Bug 改的文件（还没提交），记成「待提交」，等你在网页点「提交到 svn」。"""
     data = zt_load()
     e = data['Bug'].get(str(bid))
     if not e:
@@ -265,6 +292,16 @@ def bug_fixed(bid, done=True, commits=None, note='', by='Claude'):
     root = old.get('仓库') or (e.get('分析') or {}).get('仓库') or _bug_repo(e)[0]
     if isinstance(commits, str):
         commits = [x for x in re.split(r'[\s,，]+', commits) if x]
+    if isinstance(files, str):
+        files = [x for x in re.split(r'[\s,，]+', files) if x]
+    pending = []
+    if root and _is_svn(root) and done and files:
+        live = {pth for _, pth in hosts.svn_changes(root)[0]}
+        miss = [f for f in files if f.strip('/') not in live]
+        if miss:
+            raise KBError(f'这些文件在 svn 工作副本里没有改动（新文件要先 svn add）：{"、".join(miss)}')
+        pending = [f.strip('/') for f in files]
+        commits = [c for c in commits or [] if not re.fullmatch(r'r?\d+', c)] or None     # svn 版本号不按 git 提交校验
     ok, bad = [], []
     for c in commits or []:
         r = _git(Path(root), 'rev-parse', '--verify', '--quiet', f'{c}^{{commit}}') if root else None
@@ -279,6 +316,10 @@ def bug_fixed(bid, done=True, commits=None, note='', by='Claude'):
     e['修复'] = {**old, '状态': '已修复' if done else '未完成', '时间': now(), '提交': ok or old.get('提交', []),
                  '说明': note or '', '标记': by, '修改时间': e.get('修改时间', '')}
     e['修复'].pop('结果', None)
+    if pending:
+        e['修复']['待提交'] = pending
+    elif not done:
+        e['修复'].pop('待提交', None)
     a = e.get('分析') or {}
     if done:
         an_skip(e)
@@ -286,7 +327,51 @@ def bug_fixed(bid, done=True, commits=None, note='', by='Claude'):
         a['状态'] = a.pop('跳过前', '待审核')
     zt_save(data)
     _fx_log(e, ('已修复' if done else '未修成') + (f'，提交 {"、".join(x["提交"][:8] for x in ok)}' if ok else '') + (f'：{note}' if note else '') + f'（{by}）')
-    return f'Bug {bid} 已在知识库标记为「{"已修复" if done else "未完成"}」（不改 Bug 平台）'
+    return f'Bug {bid} 已在知识库标记为「{"已修复" if done else "未完成"}」（不改 Bug 平台）' + (
+        f'；{len(pending)} 个文件留在 svn 工作副本，等用户在网页点「提交到 svn」' if pending else '')
+
+
+def bug_svn_commit(bid, by='用户（网页）'):
+    """网页「⬆ 提交到 svn」（本人点）：把修好的 Bug 改的文件提交到 svn。和它改了同一批文件的其他待提交 Bug 一起提交。"""
+    with _FX_LOCK:
+        data = zt_load()
+        e = data['Bug'].get(str(bid))
+        f = (e or {}).get('修复') or {}
+        if not f.get('待提交'):
+            raise KBError(f'Bug {bid} 没有待提交到 svn 的改动')
+        root = f.get('仓库') or ''
+        group = [e]
+        files = set(f['待提交'])
+        grew = True
+        while grew:                     # 文件有交集的待提交 Bug 一起交（同一个文件分不开）
+            grew = False
+            for x in data['Bug'].values():
+                xf = (x.get('修复') or {})
+                if x not in group and xf.get('待提交') and xf.get('仓库') == root and files & set(xf['待提交']):
+                    group.append(x)
+                    files |= set(xf['待提交'])
+                    grew = True
+        live = {pth for _, pth in hosts.svn_changes(root)[0]}
+        bad = [pth for st, pth in hosts.svn_changes(root)[0] if st in 'C!~' and pth in files]
+        if bad:
+            raise KBError(f'这些文件有冲突或丢失：{"、".join(bad)}；在工作副本里处理后再提交')
+        todo = sorted(x for x in files if x in live)
+        ids = [x['编号'] for x in group]
+        if todo:
+            msg = 'fix: ' + '；'.join(f'Bug {x["编号"]} {x["标题"][:40]}' for x in group)
+            rev = hosts.svn_commit(root, todo, msg)
+        else:
+            rev, msg = '', ''
+        for x in group:
+            xf = x['修复']
+            xf.pop('待提交', None)
+            if rev:
+                xf['提交'] = (xf.get('提交') or []) + [{'提交': f'r{rev}', '说明': msg}]
+            _fx_log(x, (f'已提交到 svn r{rev}' if rev else '待提交的文件已经没有改动（可能已手动提交），清掉待提交标记') + f'（{by}）')
+        zt_save(data)
+    fix_queue_tick()                    # 工作副本干净了，排队的修复可以开始
+    return (f'已提交到 svn r{rev}：Bug {"、".join(ids)}，{len(todo)} 个文件' if rev
+            else f'Bug {"、".join(ids)} 的文件已经没有改动，清掉了待提交标记')
 
 
 def bug_unfix(bid, by='用户（网页）'):

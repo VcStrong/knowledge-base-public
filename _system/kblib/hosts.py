@@ -5,6 +5,10 @@
   user@host:/home/me/server           远程（scp 写法）
   ssh://user@host:2222/home/me/server 远程，带端口
 远程只用 ssh 密钥登录（BatchMode，不会弹密码）；没配好时报错提示 ssh-copy-id。知识库不存远程机器的密码。
+
+版本库：git 或 svn（工作副本）。svn 的提交直接进服务器、没有「本地提交」这一步，所以全栈里 AI 只改工作副本、不提交，
+审查看工作副本的改动（svn diff），你验收后由知识库 svn commit（svn_commit）。svn 用 --non-interactive，
+账号密码要先在那台机器上 svn update 一次让 svn 自己记住，知识库不存。
 """
 import re
 import shlex
@@ -71,16 +75,101 @@ def git(loc, *args, timeout=60):
     return run(loc, 'git ' + ' '.join(shlex.quote(a) for a in args), timeout=timeout)
 
 
+SVN = 'svn --non-interactive'
+
+
+def svn(loc, *args, timeout=120):
+    return run(loc, SVN + ' ' + ' '.join(shlex.quote(a) for a in args), timeout=timeout)
+
+
+def _top(loc):
+    """→ (版本库, 仓库根)；都不是 → ('', '')。"""
+    p = run(loc, 't=$(git rev-parse --show-toplevel 2>/dev/null) && echo "git $t"; '
+                 f't=$({SVN} info --show-item wc-root 2>/dev/null) && echo "svn $t"; true')
+    found = [ln.split(' ', 1) for ln in p.stdout.splitlines() if ln.startswith(('git ', 'svn '))]
+    if not found:
+        return '', ''
+    kind, top = max(found, key=lambda x: len(x[1].strip()))      # 套在一起时取更里面的那个
+    return kind, top.strip()
+
+
+def vcs(loc):
+    """git / svn / ''。"""
+    return _top(loc)[0]
+
+
 def check_repo(loc):
-    """路径存在、是 git 仓库；返回仓库根（同一台机器上的地址）。"""
-    p = git(loc, 'rev-parse', '--show-toplevel')
-    if p.returncode != 0:
-        raise KBError(f'{label(loc)} 不是 git 仓库')
+    """路径存在、是 git 仓库或 svn 工作副本；返回仓库根（同一台机器上的地址）。"""
+    kind, top = _top(loc)
+    if not kind:
+        raise KBError(f'{label(loc)} 不是 git 仓库，也不是 svn 工作副本（svn 要先 svn checkout 到这台机器上）')
     r = parse(loc)
-    top = p.stdout.strip()
     if not r['远程']:
         return top
     return (f'ssh://{r["主机"]}:{r["端口"]}{top}' if r['端口'] else f'{r["主机"]}:{top}')
+
+
+def head(loc, kind=''):
+    """当前版本：git 提交号 / svn 工作副本版本号。"""
+    kind = kind or vcs(loc)
+    if kind == 'svn':
+        return svn(loc, 'info', '--show-item', 'revision').stdout.strip()
+    return git(loc, 'rev-parse', 'HEAD').stdout.strip()
+
+
+def branch_of(loc, kind=''):
+    """当前分支：git 分支名；svn 是工作副本对应的目录（trunk、branches/xxx）。"""
+    kind = kind or vcs(loc)
+    if kind == 'svn':
+        rel = svn(loc, 'info', '--show-item', 'relative-url').stdout.strip()
+        return rel[2:] if rel.startswith('^/') else rel
+    return git(loc, 'branch', '--show-current').stdout.strip()
+
+
+def svn_branch(loc, name):
+    """分支名 → svn 仓库里的目录（trunk、branches/xxx）：原样、branches/<名> 依次试，服务器上有的那个。"""
+    name = (name or '').strip().strip('/')
+    name = name[2:] if name.startswith('^/') else name
+    for c in [name] + ([f'branches/{name}'] if not name.startswith(('trunk', 'branches/', 'tags/')) else []):
+        if svn(loc, 'info', '--show-item', 'kind', f'^/{c}').stdout.strip() == 'dir':
+            return c
+    raise KBError(f'svn 服务器上没有 {name}（也没有 branches/{name}）')
+
+
+def svn_changes(loc):
+    """svn 工作副本里没提交的改动 → (已纳入版本控制的改动 [(状态, 路径)], 没 svn add 的新文件 [路径])。"""
+    p = svn(loc, 'status')
+    if p.returncode:
+        raise KBError(f'{label(loc)}：svn status 失败：{(p.stderr or p.stdout).strip()[-300:]}')
+    ch, new = [], []
+    for ln in p.stdout.splitlines():
+        if len(ln) < 9 or ln.startswith(('Performing', '--- ')):
+            continue
+        st, path = ln[0], ln[8:].strip()
+        if st == '?':
+            new.append(path)
+        elif st in 'AMDRC!~' and st != ' ':
+            ch.append((st, path))
+        elif ln[1] == 'M':                      # 只改了属性
+            ch.append(('M', path))
+    return ch, new
+
+
+def svn_commit(loc, paths, msg):
+    """只提交给定的路径（不混进工作副本里别人原有的改动）→ 新版本号。"""
+    if not paths:
+        return ''
+    paths = sorted(set(paths))
+    paths = [x for x in paths if not any(x.startswith(y + '/') for y in paths)]     # 目录已在列表里，下面的不用重复
+    p = svn(loc, 'commit', '-m', msg, *paths, timeout=600)
+    if p.returncode:
+        err = (p.stderr or p.stdout).strip()[-600:]
+        hint = '（先在那台机器上手动 svn update 一次，让 svn 记住账号密码）' if 'uthenticat' in err or 'password' in err.lower() else \
+               '（服务器上有更新的版本：先 svn update 解决冲突再验收）' if 'out of date' in err.lower() or '过时' in err else ''
+        raise KBError(f'svn commit 失败{hint}：{err}')
+    import re
+    m = re.findall(r'(?:Committed revision|提交后的版本为)\s*(\d+)', p.stdout)
+    return m[-1] if m else head(loc, 'svn')
 
 
 def probe(loc, patterns, cat=()):
@@ -106,18 +195,20 @@ def probe(loc, patterns, cat=()):
 # ---------------------------------------------------------------- 给方案会话读远程代码（只读，固定几种操作）
 READ_OPS = {
     'ls': lambda a: f'ls -la {shlex.quote(a or ".")}',
-    'tree': lambda a: f'find {shlex.quote(a or ".")} -maxdepth 3 -not -path "*/.git*" -not -path "*/node_modules*" -not -path "*/build/*" | head -400',
+    'tree': lambda a: f'find {shlex.quote(a or ".")} -maxdepth 3 -not -path "*/.git*" -not -path "*/.svn*" -not -path "*/node_modules*" -not -path "*/build/*" | head -400',
     'cat': lambda a: f'head -c 120000 {shlex.quote(a)}',
     'grep': lambda a: (f'(command -v rg >/dev/null && rg -n --max-count 20 --max-columns 300 -e {shlex.quote(a)} . || '
-                       f'grep -rn --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=build -e {shlex.quote(a)} . ) | head -300'),
-    'find': lambda a: f'find . -not -path "*/.git/*" -not -path "*/node_modules/*" -name {shlex.quote(a)} | head -200',
-    'git-log': lambda a: f'git log --oneline -n 40 {("-- " + shlex.quote(a)) if a else ""}',
-    'git-show': lambda a: f'git show --stat {shlex.quote(a or "HEAD")} | head -200',
+                       f'grep -rn --exclude-dir=.git --exclude-dir=.svn --exclude-dir=node_modules --exclude-dir=build -e {shlex.quote(a)} . ) | head -300'),
+    'find': lambda a: f'find . -not -path "*/.git/*" -not -path "*/.svn/*" -not -path "*/node_modules/*" -name {shlex.quote(a)} | head -200',
+    'git-log': lambda a: (f'if [ -d .svn ] || ! git rev-parse 2>/dev/null; then {SVN} log -l 40 {shlex.quote(a or ".")}; '
+                          f'else git log --oneline -n 40 {("-- " + shlex.quote(a)) if a else ""}; fi'),
+    'git-show': lambda a: (f'if [ -d .svn ] || ! git rev-parse 2>/dev/null; then {SVN} log -v -r {shlex.quote(a or "BASE")} | head -200; '
+                           f'else git show --stat {shlex.quote(a or "HEAD")} | head -200; fi'),
 }
 
 
 def repo_read(loc, op, arg=''):
-    """只读查看仓库（本机或远程）：ls / tree / cat / grep / find / git-log / git-show。"""
+    """只读查看仓库（本机或远程）：ls / tree / cat / grep / find / git-log / git-show（svn 工作副本自动换成 svn log）。"""
     if op not in READ_OPS:
         raise KBError(f'op 只能是：{"、".join(READ_OPS)}')
     if op in ('cat',) and not arg:

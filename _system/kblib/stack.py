@@ -18,7 +18,6 @@ from .common import PERIODS, KBError, now
 from . import hosts
 from .periods import design_previews, load_meta, log, period_dir, period_names, save_meta
 from .repos import load_repos
-from .devprep import _git
 from .devsession import _alive, _dev_result, _notify
 from .engines import engine_popen, role_engine
 from .flows import flow_for
@@ -77,10 +76,10 @@ def stack_repos():
         if hosts.is_remote(pth):          # 远程的不在这里逐个连（慢），选了再校验
             out.append({'路径': pth, '名称': nm, '端': [], '分支': '', '远程': True})
             continue
-        if not (Path(pth) / '.git').exists():
+        kind = 'git' if (Path(pth) / '.git').exists() else 'svn' if (Path(pth) / '.svn').exists() else ''
+        if not kind:
             continue
-        out.append({'路径': pth, '名称': nm, '端': detect_ends(pth),
-                    '分支': _git(Path(pth), 'branch', '--show-current').stdout.strip()})
+        out.append({'路径': pth, '名称': nm, '端': detect_ends(pth), '版本库': kind, '分支': hosts.branch_of(pth, kind)})
     return sorted(out, key=lambda x: (ENDS.index(x['端'][0]) if x['端'] else 9, x['名称']))
 
 
@@ -103,9 +102,13 @@ def stack_set_end(name, end, repo='', branch='', by='用户（网页）'):
     ends = period_ends(d, m)
     repo = (repo or '').strip()
     if repo:
-        rp = hosts.check_repo(repo)          # 路径不存在 / 不是 git 仓库 / 远程连不上 都在这里报
-        ends[end] = {'仓库': rp, '分支': (branch or '').strip()}
-        msg = f'{end}：{hosts.label(rp)}' + (f'，分支 {branch.strip()}' if (branch or '').strip() else '')
+        rp = hosts.check_repo(repo)          # 路径不存在 / 不是 git 仓库或 svn 工作副本 / 远程连不上 都在这里报
+        kind = hosts.vcs(rp)
+        branch = (branch or '').strip()
+        if kind == 'svn' and branch:
+            branch = hosts.svn_branch(rp, branch)        # feat-x → branches/feat-x（服务器上没有就报错）
+        ends[end] = {'仓库': rp, '分支': branch, '版本库': kind}
+        msg = f'{end}：{hosts.label(rp)}' + ('（svn：AI 只改工作副本，你验收后由知识库提交）' if kind == 'svn' else '') + (f'，分支 {branch}' if branch else '')
     else:
         ends.pop(end, None)
         msg = f'{end}：不涉及'
@@ -417,8 +420,10 @@ def stack_get(name):
         if v:
             remote = hosts.is_remote(v['仓库'])
             f = None if remote else flow_for(m, v['仓库']) if Path(v['仓库']).is_dir() else None
-            cur = '' if remote else _git(Path(v['仓库']), 'branch', '--show-current').stdout.strip() if Path(v['仓库']).is_dir() else ''
+            kind = v.get('版本库') or 'git'
+            cur = '' if remote else hosts.branch_of(v['仓库'], kind) if Path(v['仓库']).is_dir() else ''
             rows.append({'端': e, '仓库': v['仓库'], '显示': hosts.label(v['仓库']), '远程': remote, '分支': v.get('分支', ''), '当前分支': cur,
+                         '版本库': kind,
                          '流程': '（远程：开工时在那台机器上匹配）' if remote else f['名称'] if f else '（没有匹配的流程）', '来自': v.get('来自', '')})
         else:
             rows.append({'端': e})

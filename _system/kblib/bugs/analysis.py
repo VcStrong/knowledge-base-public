@@ -13,6 +13,7 @@ from ..search import index_docs
 from ..engines import engine_popen, role_engine
 from ..devprep import _git, _git_root, repo_candidates, want_branches
 from ..hosts import is_remote
+from .. import hosts
 from ..devsession import _alive, _dev_result, _notify
 from ..bugs.sources import bug_sources
 from ..bugs.index import ZT_DIR, _zt_recheck, zt_load, zt_save
@@ -115,8 +116,8 @@ def _bug_repo(e):
                 _an_learn(e, pick['路径'])
                 return pick['路径'], branch, f'{o["类型"]}「{o["名称"]}」的仓库'
     mp = (load_settings().get('Bug仓库') or {}).get(f'{e.get("来源") or "禅道"}/{e.get("产品ID", "")}')
-    if mp and _git_root(mp):
-        return str(_git_root(mp)), branch, f'产品「{e.get("产品")}」以前用过的仓库'
+    if mp and _repo_root(mp):
+        return str(_repo_root(mp)), branch, f'产品「{e.get("产品")}」以前用过的仓库'
     return '', branch, ''
 
 
@@ -132,13 +133,27 @@ def _an_learn(e, root):
         save_settings(st)
 
 
-def _an_prompt(root, items, cur_branch):
-    out = [f"""你是由知识库网页启动的【后台无人值守、只读】Bug 分析会话。终端里没有人，不要提问。
-代码仓库：{root}（当前检出分支 {cur_branch or '未知'}）
+def _repo_root(p):
+    """git 仓库根，或 svn 工作副本根。"""
+    r = _git_root(p)
+    if r or not p or not Path(p).expanduser().is_dir():
+        return r
+    kind, top = hosts._top(str(Path(p).expanduser()))
+    return Path(top).resolve() if kind == 'svn' else None
 
-【只读】不许修改、新建、删除任何文件，不许 git commit / checkout / switch / stash / reset / pull，不许装包、不许操作手机。
+
+def _an_prompt(root, items, cur_branch):
+    svn = (Path(root) / '.svn').exists() and not (Path(root) / '.git').exists()
+    rules = ('''【只读】不许修改、新建、删除任何文件，不许 svn commit / update / switch / revert，不许装包、不许操作手机。
+这是 svn 工作副本。只做：读代码、grep / rg、svn log / diff / blame / cat、kb_* 知识库工具。
+要看别的分支时不要切换：用 svn cat ^/branches/<分支>/<路径>、svn log ^/branches/<分支> 读。''' if svn else
+             '''【只读】不许修改、新建、删除任何文件，不许 git commit / checkout / switch / stash / reset / pull，不许装包、不许操作手机。
 只做：读代码、grep / rg、git log / show / blame / diff / grep、kb_* 知识库工具。
-要看的分支不是当前检出的分支时，不要切换：用 git show <分支>:<路径>、git grep <内容> <分支>、git log <分支> 读。
+要看的分支不是当前检出的分支时，不要切换：用 git show <分支>:<路径>、git grep <内容> <分支>、git log <分支> 读。''')
+    out = [f"""你是由知识库网页启动的【后台无人值守、只读】Bug 分析会话。终端里没有人，不要提问。
+代码仓库：{root}（当前{'对应目录' if svn else '检出分支'} {cur_branch or '未知'}）
+
+{rules}
 
 要分析的 Bug："""]
     for e, branch, why, note in items:
@@ -149,7 +164,7 @@ def _an_prompt(root, items, cur_branch):
 每个 Bug 依次做：
 1. kb_bug_get 实时拉取正文、评论、截图（截图用 Read 看）——以平台最新内容为准，不要只看标题。
 2. 有归属的期 / 事项：kb_iteration 看需求、开发分支和记录。本期分支上的改动是首要线索：
-   用 git log --oneline <开发分支> 和 git merge-base 找出本期的提交，git show / git diff 看相关改动。
+   git 用 git log --oneline <开发分支> 和 git merge-base 找出本期的提交，git show / git diff 看相关改动；svn 用 svn log -v ^/branches/<开发分支> 和 svn diff -c <版本号>。
 3. kb_search 看以前事项的结论、别的 Bug 分析里有没有同类问题。
 4. 在代码里定位（kb_search scope=code、grep、读文件），找出最可能出问题的位置。每个位置都要亲自读过，确认路径（相对仓库根目录）和行号真实存在；
    代码在开发分支上而不在当前检出分支上的，路径照写，并在说明里注明「在分支 xxx」。
@@ -209,8 +224,9 @@ def bug_analyze(ids, by='用户（网页）'):
             sid = datetime.now().strftime('%Y%m%d-%H%M%S-') + uuid_hex()[:4]
             (ZT_DIR / '分析会话').mkdir(parents=True, exist_ok=True)
             logf = ZT_DIR / '分析会话' / f'{sid}.jsonl'
-            cur = _git(Path(root), 'branch', '--show-current').stdout.strip()
-            git0 = _git(Path(root), 'status', '--porcelain').stdout
+            cur = hosts.branch_of(root) if (Path(root) / '.svn').exists() and not (Path(root) / '.git').exists() \
+                else _git(Path(root), 'branch', '--show-current').stdout.strip()
+            git0 = _wc_status(root)
             proc = engine_popen(eng, _an_prompt(root, part, cur), f'kb·分析·Bug {"、".join(x[0]["编号"] for x in part)}', logf, root,
                                 env_extra={'KB_SESSION': 'an:' + sid}, extra_args=_readonly_args(eng))
             _AN[sid] = proc
@@ -236,9 +252,9 @@ def bug_analyze(ids, by='用户（网页）'):
 
 def bug_analyze_in(ids, root, by='用户（网页）'):
     """网页弹窗选了仓库：记住 产品 → 仓库，再分析。"""
-    r = _git_root(root)
+    r = _repo_root(root)
     if not r:
-        raise KBError(f'不是 git 仓库：{root}')
+        raise KBError(f'不是 git 仓库，也不是 svn 工作副本：{root}')
     data = zt_load()
     for bid in ids:
         e = data['Bug'].get(str(bid))
@@ -247,13 +263,24 @@ def bug_analyze_in(ids, root, by='用户（网页）'):
     return bug_analyze(ids, by)
 
 
+def _wc_status(root):
+    """工作区状态快照（只读会话前后对比）：git status，svn 工作副本用 svn status。"""
+    rp = Path(root or '')
+    if not rp.exists():
+        return ''
+    if (rp / '.svn').exists() and not (rp / '.git').exists():
+        import subprocess
+        return subprocess.run(['svn', '--non-interactive', 'status'], cwd=rp, capture_output=True, text=True, timeout=60).stdout
+    return _git(rp, 'status', '--porcelain').stdout
+
+
 def _an_finish(sid, code=None):
     items = _an_load()
     x = next((i for i in items if i['编号'] == sid), None)
     if not x or x.get('状态') != '运行中':
         return
     res = _dev_result(x.get('日志', ''))
-    git1 = _git(Path(x['仓库']), 'status', '--porcelain').stdout if Path(x['仓库']).exists() else ''
+    git1 = _wc_status(x['仓库'])
     x.update(状态='已结束', 结束时间=now(), 退出码=code, 结果=(res.get('结果') or '')[:1500], 费用=res.get('费用'))
     if x.get('类型') == '修复':
         data = zt_load()
@@ -270,17 +297,24 @@ def _an_finish(sid, code=None):
                 left.append(b)
         zt_save(data)
         x['完成'] = done
-        new = _git(Path(x['仓库']), 'log', '--format=%h %s', f'{x.get("起点", "HEAD")}..HEAD').stdout.strip().splitlines() if x.get('起点') else []
+        svn = (Path(x['仓库']) / '.svn').exists() and not (Path(x['仓库']) / '.git').exists()
+        if svn:
+            new = []
+            pend = [b for b in done if (data['Bug'][b].get('修复') or {}).get('待提交')]
+            tail = f'；{len(pend)} 个等你在网页点「提交到 svn」' if pend else ''
+        else:
+            new = _git(Path(x['仓库']), 'log', '--format=%h %s', f'{x.get("起点", "HEAD")}..HEAD').stdout.strip().splitlines() if x.get('起点') else []
+            tail = f'；新提交 {len(new)} 个'
         x['新提交'] = new[:20]
         _an_save(items)
-        _notify('知识库 · Bug 修复', f'修好 {len(done)} 条' + (f'，未完成 {"、".join(left)}' if left else '') + f'；新提交 {len(new)} 个')
+        _notify('知识库 · Bug 修复', f'修好 {len(done)} 条' + (f'，未完成 {"、".join(left)}' if left else '') + tail)
         try:
             _bug_fix.fix_queue_tick()          # 队列里还有的接着修
         except Exception as ex:
             print('fix_queue_tick:', repr(ex), file=sys.stderr)
         return
     if git1 != x.get('git前', git1):
-        x['警告'] = '分析前后仓库的 git status 不一样：只读会话可能改了文件，请检查'
+        x['警告'] = '分析前后仓库的 git / svn status 不一样：只读会话可能改了文件，请检查'
     x.pop('git前', None)
     data = zt_load()
     done = [b for b in x['Bug'] if (data['Bug'].get(b, {}).get('分析') or {}).get('会话') == sid]

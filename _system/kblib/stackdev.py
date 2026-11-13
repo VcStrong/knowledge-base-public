@@ -8,7 +8,8 @@
   打回 → 接着原会话改（最多 MAX_ROUNDS 轮），还不过就停下等你看；全部通过 → 等你看证据包（拍板 2，P4）。
 期信息「各端开发」：{端: {状态, 轮次, 起点, 会话, 日志, 审查日志, 开始, 结束, 汇报, 审查, 引擎, 待办}}
 状态：排队中 / 开发中 / 待审查 / 审查中 / 打回修改 / 审查通过 / 要你看 / 失败 / 已停止
-远程仓库的开发会话（ssh 起 claude、反向通道接知识库工具）还没接入：远程的端会标「失败：远程开发会话还没接入」。
+svn 的端：svn 一提交就进服务器，所以 AI 只改工作副本、不提交；审查看 svn diff；你验收时知识库只提交这次改的文件
+  （开工前工作副本里原有的改动不碰），各端开发记「已提交」= 版本号。git 的端：AI 在本地提交、不推送，你验收时知识库推送开发分支（记「已推送」）。
 """
 import json
 import os
@@ -86,8 +87,9 @@ def stack_dev_start(name, only='', by='用户（网页）'):
         if e not in ends:
             skip.append(f'{e}（没选仓库）')
             continue
-        dev[e] = {'状态': '排队中', '轮次': 0, '排队时间': now(), '仓库': ends[e]['仓库'], '分支': ends[e].get('分支', ''),
-                  '会话': cur.get('会话', '') if only else '', '起点': cur.get('起点', '') if only else ''}
+        dev[e] = {'状态': '排队中', '轮次': 0, '排队时间': now(), '仓库': ends[e]['仓库'], '分支': ends[e].get('分支', ''), '版本库': ends[e].get('版本库', ''),
+                  '会话': cur.get('会话', '') if only else '',
+                  '起点': cur.get('起点', '') if only and not (cur.get('已推送') or cur.get('已提交')) else ''}
         out.append(e)
     if not out:
         raise KBError('没有可开工的端：' + '；'.join(skip))
@@ -168,11 +170,12 @@ def _dev_prompt(d, m, end, x, plan, issues=None, todo=''):
     mine = next((p for p in plan['各端'] if p['端'] == end), {})
     reqs = [r for r in plan.get('需求') or [] if end in (r.get('端') or [])]
     root, branch = x['仓库'], x.get('分支', '')
+    svn = x.get('版本库') == 'svn'
     f = flow_for(m, root) if not hosts.is_remote(root) else None
     steps = flow_text(f, '开发步骤', 期名=d.name, 仓库=root, 分支=branch, 文档目录='', 资料目录='') if f else ''
     server_ok = (m.get('各端开发') or {}).get('服务端', {}).get('状态') == '审查通过' or x.get('联调')
     if issues is not None:
-        return (f'审查会话把 {end} 这一轮打回了（第 {x["轮次"]} 轮），问题如下，逐条改完、自测、提交，再用 kb_stack_report 重新汇报：\n'
+        return (f'审查会话把 {end} 这一轮打回了（第 {x["轮次"]} 轮），问题如下，逐条改完、自测、{"留在 svn 工作副本里（不要 svn commit）" if svn else "提交"}，再用 kb_stack_report 重新汇报：\n'
                 + '\n'.join(f'- [{i.get("严重度", "")}] {i.get("需求", "")} {i.get("问题", "")}（{i.get("位置", "")}）' for i in issues)
                 + ('\n有不同意见的，在汇报的 summary 里说明理由，不要硬改。' ) + _NO_BG)
     return f"""你是由知识库网页启动的【后台无人值守】{end} 开发会话：期「{d.name}」。终端里没有人，不要在回复里提问，也不要用 AskUserQuestion；
@@ -182,8 +185,8 @@ def _dev_prompt(d, m, end, x, plan, issues=None, todo=''):
 - 需求规格：{_sdir(d) / 'spec.md'}（需求编号 REQ-xxx，验收标准逐条要满足）
 - 接口契约：{cp or '本期不涉及接口'}{f'（{ver}，已锁定；和它不一致的地方不要自己改契约，用 kb_ask 提出）' if cp else ''}
 - 设计稿：kb_period（name=「{d.name}」）里的设计图（PSD 看同名 .png 预览）
-- 仓库：{root}，分支：{branch or '（用仓库当前分支；要新建就按仓库惯例从主干拉，先 kb_ask 确认分支名）'}
-  先确认在这个分支上：本地没有就从远端拉；有别人未提交的改动不要 reset / stash，用 kb_ask 问。
+{_vcs_lines(root, branch) if svn else f"""- 仓库：{root}，分支：{branch or '（用仓库当前分支；要新建就按仓库惯例从主干拉，先 kb_ask 确认分支名）'}
+  先确认在这个分支上：本地没有就从远端拉；有别人未提交的改动不要 reset / stash，用 kb_ask 问。"""}
 {('- 待办：' + todo) if todo else ''}
 你这个端要做的（拍板方案里的改动）：
 {chr(10).join('- ' + c for c in mine.get('改动') or []) or '- （方案没列具体改动，按需求自己定）'}
@@ -193,13 +196,23 @@ def _dev_prompt(d, m, end, x, plan, issues=None, todo=''):
 约定：
 - {'服务端已经做完并通过审查，客户端可以直接接真实接口。' if server_ok or end == '服务端' else '服务端接口可能还没做好：客户端先按接口契约写 mock（优先用项目已有的 mock 方式），做成一键切换，联调时再切真实接口。'}
 - 服务端：按契约实现接口和数据变更，写接口测试（至少覆盖契约里的每个接口的成功和主要错误码）。
-- 提交按仓库惯例，提交说明里带需求编号（如 feat(xxx): … REQ-001）；不要 push；只改这个端的仓库。
+{_SVN_RULE if svn else '- 提交按仓库惯例，提交说明里带需求编号（如 feat(xxx): … REQ-001）；不要 push；只改这个端的仓库。'}
 - 做的过程中发现：需求得改、别的端也必须配合 / 兼容、接口契约得改、方案漏了东西——不要自己去改别的端或契约，
   用 kb_stack_change（iteration=「{d.name}」，from_end={end}）提出来（说清为什么、影响哪些端），然后继续做不受影响的部分；
   用户拍板后你会收到要补做的内容。
 - 做完自测：能编译、相关测试能跑过；有界面的截图留证据（放仓库外的临时目录，路径写进汇报）。
 最后用 kb_stack_report 汇报一次（iteration=「{d.name}」，end={end}）：status 完成 / 卡住；summary 做了什么；
-reqs 每个需求的完成度（完成 / 部分 / 没做 + 原因）；evidence 自测证据（编译、测试结果、截图路径）；commits 提交号。""" + _NO_BG
+reqs 每个需求的完成度（完成 / 部分 / 没做 + 原因）；evidence 自测证据（编译、测试结果、截图路径）；commits {'留空（svn 不提交），在 summary 里列改了哪些文件' if svn else '提交号'}。""" + _NO_BG
+
+
+_SVN_RULE = ('- 这是 svn 工作副本：【不要 svn commit】（svn 一提交就直接进服务器，要等审查通过、用户验收后由知识库统一提交）；'
+             '新文件 svn add、删文件 svn delete、改名 svn move，让 svn status 能看到全部改动；不要 svn revert 不是你改的文件；只改这个端的仓库。')
+
+
+def _vcs_lines(root, branch):
+    return (f'- 仓库：{root}（svn 工作副本），分支：{branch or "（工作副本当前对应的目录）"}\n'
+            f'  先 svn update；{"不在这个分支就 svn switch ^/" + branch + "（分支目录不存在就 kb_ask，不要自己 svn copy 建分支）" if branch else "不要 svn switch"}；'
+            '工作副本里有别人没提交的改动，不要 revert，用 kb_ask 问。')
 
 
 def _spawn(d, end, kind, prompt, root, resume='', readonly=False):
@@ -234,8 +247,13 @@ def _start_dev(d, end):
     root = x['仓库']
     plan = _plan(d)
     issues = (x.get('审查') or {}).get('问题') if x['状态'] == '打回修改' else None
+    if not x.get('版本库'):
+        x['版本库'] = hosts.vcs(root) or 'git'
     if not x.get('起点'):
-        x['起点'] = hosts.git(root, 'rev-parse', 'HEAD').stdout.strip()
+        x['起点'] = hosts.head(root, x['版本库'])
+        if x['版本库'] == 'svn':           # 开工前工作副本里原有的改动：验收提交时不碰
+            ch, new = hosts.svn_changes(root)
+            x['原有改动'] = [pth for _, pth in ch] + new
     resume = x.get('会话', '') if issues is not None else ''
     prompt = _dev_prompt(d, m, end, x, plan, issues if resume else None, x.pop('待办', ''))
     if issues is not None and not resume:          # 会话号丢了：新开，带上打回的问题
@@ -262,7 +280,7 @@ def _review_prompt(d, m, end, x, plan):
 - 需求规格：{_sdir(d) / 'spec.md'}（逐条看涉及 {end} 的需求和验收标准）
 - 接口契约：{cp or '本期不涉及接口'}{f'（{ver}）' if cp else ''}
 - 设计稿：kb_period（name=「{d.name}」）里的设计图
-- 这次的改动：仓库 {x['仓库']}，git diff {x.get('起点') or 'HEAD~1'}..HEAD（先 git log --oneline {x.get('起点') or 'HEAD~1'}..HEAD 看提交）
+{_review_diff(x)}
 - 开发会话的汇报：{rep.get('总结', '')}；自测证据：{rep.get('证据', '')}
 
 逐项检查：
@@ -274,6 +292,16 @@ def _review_prompt(d, m, end, x, plan):
 只报真实问题，不报风格偏好。严重度：高 = 需求没做到 / 会出错；中 = 做偏了 / 缺状态；低 = 可以以后再改。
 最后用 kb_stack_review 交回一次（iteration=「{d.name}」，end={end}）：verdict 通过（没有「高」和「中」）/ 打回；
 issues：[{{"需求": "REQ-001", "严重度": "高/中/低", "问题": "…", "位置": "文件:行"}}]；summary 一两句。""" + _NO_BG
+
+
+def _review_diff(x):
+    if x.get('版本库') != 'svn':
+        return f"- 这次的改动：仓库 {x['仓库']}，git diff {x.get('起点') or 'HEAD~1'}..HEAD（先 git log --oneline {x.get('起点') or 'HEAD~1'}..HEAD 看提交）"
+    pre = x.get('原有改动') or []
+    return (f"- 这次的改动：svn 工作副本 {x['仓库']} 里还没提交的改动（开工时是 r{x.get('起点') or '?'}，改动都没提交）："
+            "先 svn status 看改了哪些文件，再 svn diff 看内容；「?」开头的是没 svn add 的新文件，也要看，并作为问题指出（没加入版本控制就提交不上）。"
+            + (f"\n  这些是开工前就有的改动，不算这次的：{'、'.join(pre[:30])}" if pre else '')
+            + '\n  不要 svn commit / update / revert / switch。')
 
 
 def _start_review(d, end):
@@ -419,7 +447,7 @@ def plan_changed(d, old, new, ver=''):
             if e not in ends:
                 out.append(f'{e} 要做但还没选仓库（选好后自动开工）')
                 continue
-            dev[e] = {'状态': '排队中', '轮次': 0, '排队时间': now(), '仓库': ends[e]['仓库'], '分支': ends[e].get('分支', ''),
+            dev[e] = {'状态': '排队中', '轮次': 0, '排队时间': now(), '仓库': ends[e]['仓库'], '分支': ends[e].get('分支', ''), '版本库': ends[e].get('版本库', ''),
                       '待办': f'方案 {pv} 变更后这个端新加入：' + ('；'.join(parts) or '按 spec.md 里涉及这个端的需求做')}
             out.append(f'{e} 新加入，排队开工')
             continue
@@ -432,6 +460,9 @@ def plan_changed(d, old, new, ver=''):
                                             '目标': f'{e}开发', '显示': f'方案 {pv} 变更：{"；".join(parts)[:40]}'})
             out.append(f'{e}（在跑）已通知')
         else:
+            if cur.get('已推送') or cur.get('已提交'):       # 验收送上服务器之后又改：重新记起点，下次验收再推送 / 提交
+                for k in ('已推送', '已提交', '起点', '原有改动'):
+                    cur.pop(k, None)
             cur.update(状态='排队中', 待办=todo, 排队时间=now(), 轮次=0)
             out.append(f'{e} 重新排队补做')
     for e in oldI:
@@ -483,14 +514,91 @@ def stack_accept(name, by='用户（网页）'):
     st = m.get('全栈') or {}
     if st.get('状态') != '各端完成':
         raise KBError('各端还没都结束')
-    ev = evidence(d, m, _plan(d)) or {}
+    plan = _plan(d)
+    ev = evidence(d, m, plan) or {}
+    done = _publish_ends(d, m, plan)               # 验收才进服务器：git 推送、svn 提交（失败就不验收，处理后再点）
     st.update(状态='已验收', 验收时间=now(), 验收人=by, 验收时全部通过=ev.get('全部通过', False))
     m['全栈'] = st
     save_meta(d, m)
     log(d, '全栈', f'验收（拍板 2）' + ('' if ev.get('全部通过') else '：有没完全通过的需求，带着问题验收') + f'（{by}）')
     if m.get('状态') != '已完成':
         set_status(d.name, '已完成', '全栈验收通过（本人）', by_human=True)
-    return '已验收，这一期标为已完成；后续 Bug 照常同步、分析、修复'
+    return '已验收，这一期标为已完成' + (f'；{"；".join(done)}' if done else '') + '；后续 Bug 照常同步、分析、修复'
+
+
+def _git_push_end(d, e, x):
+    """git 的端：把开发分支推到远端（只推这一个分支）。→ 一句结果；推不上抛错。"""
+    root = x['仓库']
+    g = lambda *a, t=60: hosts.git(root, *a, timeout=t)
+    b = x.get('分支') or g('branch', '--show-current').stdout.strip()
+    if not b:
+        raise KBError(f'{e}：仓库不在任何分支上（游离 HEAD），不知道推哪个分支；切到开发分支后再验收')
+    if g('rev-parse', '--verify', '--quiet', f'refs/heads/{b}').returncode:
+        raise KBError(f'{e}：本地没有分支 {b}')
+    n = g('rev-list', '--count', f'{x["起点"]}..refs/heads/{b}').stdout.strip() if x.get('起点') else '1'
+    if n == '0':
+        x['已推送'] = '无改动'
+        return f'{e}（git）分支 {b} 没有新提交，不用推送'
+    rs = g('remote').stdout.split()
+    remote = 'origin' if 'origin' in rs else (rs[0] if rs else '')
+    if not remote:
+        x['已推送'] = '没有远端'
+        return f'{e}（git）仓库没有远端，没推送（{n} 个提交留在本地 {b}）'
+    r = hosts.run(root, f'GIT_TERMINAL_PROMPT=0 git push -u {remote} refs/heads/{b}:refs/heads/{b}', timeout=300)
+    if r.returncode:
+        err = (r.stderr or r.stdout).strip()[-600:]
+        hint = ('远端有别人的新提交：先在仓库里 git pull --rebase，解决冲突后再验收' if any(k in err for k in ('rejected', 'fetch first', 'non-fast-forward'))
+                else '没有推送权限或要登录：先在那台机器上手动 git push 一次' if any(k in err.lower() for k in ('denied', 'authentication', 'could not read', 'permission')) else '')
+        raise KBError(f'{e}：git push 失败' + (f'（{hint}）' if hint else '') + f'：{err}')
+    sha = g('rev-parse', '--short', f'refs/heads/{b}').stdout.strip()
+    x.update(已推送=f'{remote}/{b}@{sha}', 推送时间=now())
+    dirty = g('status', '--porcelain', '--untracked-files=no').stdout.strip()
+    log(d, '各端开发', f'{e} 验收后推送 {remote}/{b}（{n} 个提交，{sha}）')
+    return f'{e}（git）已推送 {remote}/{b}，{n} 个提交' + ('；工作区还有没提交的改动，没推送' if dirty else '')
+
+
+def _publish_ends(d, m, plan):
+    """验收时把审查通过的各端送上服务器：git 推送开发分支；svn 只提交这次改的文件（开工前原有的改动不碰）。
+    逐端保存，失败后重点验收会跳过已推送 / 已提交的。"""
+    out = []
+    for e, x in (m.get('各端开发') or {}).items():
+        if x.get('版本库') != 'svn':
+            if x.get('已推送'):
+                continue
+            if x.get('状态') != '审查通过':
+                out.append(f'{e}（git）没通过审查，没有推送，提交留在本地')
+                continue
+            out.append(_git_push_end(d, e, x))
+            save_meta(d, m)
+            continue
+        if x.get('已提交'):
+            continue
+        if x.get('状态') != '审查通过':
+            out.append(f'{e}（svn）没通过审查，没有提交，改动留在工作副本里')
+            continue
+        ch, new = hosts.svn_changes(x['仓库'])
+        pre = set(x.get('原有改动') or [])
+        bad = [pth for st, pth in ch if st in 'C!~']
+        if bad:
+            raise KBError(f'{e} 的 svn 工作副本有冲突或丢失的文件：{"、".join(bad[:10])}；处理好后再点验收')
+        mine = [pth for _, pth in ch if pth not in pre]
+        mixed = [q for q in pre if any(q.startswith(pth + '/') for pth in mine)]
+        if mixed:
+            raise KBError(f'{e}：要提交的目录下有开工前就有的改动（{"、".join(mixed[:5])}），自动提交会把它们混进去；先手动处理再验收')
+        loose = [pth for pth in new if pth not in pre]
+        if not mine:
+            x['已提交'] = '无改动'
+            out.append(f'{e}（svn）工作副本没有改动，不用提交')
+        else:
+            reqs = [r['编号'] for r in plan.get('需求') or [] if e in (r.get('端') or [])]
+            rev = hosts.svn_commit(x['仓库'], mine, f'{d.name}（{e}）' + (f'：{"、".join(reqs)}' if reqs else ''))
+            x.update(已提交=rev, 提交文件=len(mine), 提交时间=now())
+            out.append(f'{e}（svn）已提交 r{rev}，{len(mine)} 个文件')
+            log(d, '各端开发', f'{e} 验收后 svn 提交 r{rev}（{len(mine)} 个文件）')
+        if loose:
+            out.append(f'{e} 还有 {len(loose)} 个新文件没 svn add、没提交：{"、".join(loose[:5])}')
+        save_meta(d, m)
+    return out
 
 
 # ---------------------------------------------------------------- 远程机器上的会话：ssh 起 claude，反向通道接本机知识库
@@ -534,7 +642,7 @@ def stack_dev_view(d, m):
         x = dev.get(e)
         if not x:
             continue
-        out.append({'端': e, **{k: x.get(k) for k in ('状态', '轮次', '开始时间', '结束时间', '引擎', '等待', '结果', '汇报', '审查', '仓库', '分支')},
+        out.append({'端': e, **{k: x.get(k) for k in ('状态', '轮次', '开始时间', '结束时间', '引擎', '等待', '结果', '汇报', '审查', '仓库', '分支', '版本库', '已提交', '已推送')},
                     '在跑': x.get('状态') in RUNNING and _alive(x.get('pid', 0))})
     return out
 

@@ -504,7 +504,7 @@ function anCell(b){const a=b['分析'],done=(b['修复']||{})['状态']==='已�
 function fixCell(b){const f=b['修复'],a=b['分析'];
   if(f&&f['状态']==='修复中')return '<div style="margin-top:4px"><span class="badge st-开发中">🔧 修复中</span></div>';
   if(f&&f['状态']==='排队中')return `<div style="margin-top:4px"><span class="badge ${f['阻塞']?'st-已暂停2':'st-已批准开发'}" title="${esc(f['等待']||'')}">${f['阻塞']?'⛔ 排队受阻':'⏳ 排队中'}</span></div>`;
-  if(f)return `<div style="margin-top:4px"><a data-bfx="${esc(b['编号'])}" title="${esc(f['说明']||'')}"><span class="badge ${f['状态']==='已修复'?'st-已完成':'st-已暂停2'}">${f['状态']==='已修复'?'✅ 已修复':'⚠ 未修成'}</span>${(f['提交']||[]).length?` <span class="mono small">${esc(f['提交'][0]['提交'].slice(0,8))}</span>`:''}</a></div>`;
+  if(f)return `<div style="margin-top:4px"><a data-bfx="${esc(b['编号'])}" title="${esc(f['说明']||'')}"><span class="badge ${f['状态']==='已修复'?'st-已完成':'st-已暂停2'}">${f['状态']==='已修复'?'✅ 已修复':'⚠ 未修成'}</span>${(f['提交']||[]).length?` <span class="mono small">${esc(f['提交'][0]['提交'].slice(0,8))}</span>`:''}</a>${(f['待提交']||[]).length?` <button class="small pri" data-bsvn="${esc(b['编号'])}" title="修复改的 ${f['待提交'].length} 个文件还在 svn 工作副本里：点了才提交到 svn 服务器">⬆ 提交到 svn</button>`:''}</div>`;
   return a&&a['状态']==='已通过'&&!a['过时']&&b['状态']!=='已关闭'?`<div style="margin-top:4px"><button class="small" data-bfix="${esc(b['编号'])}" title="加入修复队列：后台按审核通过的思路改代码、每个 Bug 单独提交，修好后在知识库标记（不改 Bug 平台）">🔧 修复</button></div>`:''}
 // 修复进度 / 排队 / 异常：放在 Bug 列表最上面；ids 给了就只看这些 Bug（期页面）
 function fixPanel(q,ids){
@@ -533,10 +533,15 @@ function fixDlg(b){const f=b['修复'];
     <p><span class="badge ${f['状态']==='已修复'?'st-已完成':'st-已暂停2'}">${esc(f['状态'])}</span> <span class="small mut">${esc(f['时间']||'')} · ${esc(f['标记']||'')}</span></p>
     ${(f['提交']||[]).map(c=>`<div class="mono small">${esc(c['提交'])} ${esc(c['说明'])}</div>`).join('')}
     ${f['说明']?`<div style="white-space:pre-wrap">${esc(f['说明'])}</div>`:''}
+    ${(f['待提交']||[]).length?`<p class="small"><b>还没提交到 svn 的文件</b>：<span class="mono">${f['待提交'].map(esc).join('、')}</span></p>`:''}
     <p class="mut small">只记在知识库里，不改 Bug 平台；平台上的状态由测试 / 你自己去改。</p>
-    <div class="row">${f['状态']!=='已修复'&&b['分析']&&b['分析']['状态']==='已通过'?'<button class="pri" id="fxAgain">🔧 重新修复…</button>':''}<button id="fxUndo">撤销标记</button></div></div>`);
+    <div class="row">${(f['待提交']||[]).length?`<button class="pri" data-bsvn="${esc(b['编号'])}">⬆ 提交到 svn</button>`:''}${f['状态']!=='已修复'&&b['分析']&&b['分析']['状态']==='已通过'?'<button class="pri" id="fxAgain">🔧 重新修复…</button>':''}<button id="fxUndo">撤销标记</button></div></div>`);
   if($('#fxAgain'))$('#fxAgain').onclick=()=>{dlg.close();analysisDlg(b['编号']).catch(e=>toast(e.message))};   // 先改审核意见再修
+  bindSvnCommit(dlg);
   $('#fxUndo').onclick=async()=>{try{const r=await post('/api/zentao/unfix',{id:b['编号']});toast(r.msg);dlg.close();render()}catch(e){toast(e.message)}}}
+function bindSvnCommit(root){root.querySelectorAll('[data-bsvn]').forEach(b=>b.onclick=async e=>{e.preventDefault();e.stopPropagation();
+  if(!confirm(`把 Bug ${b.dataset.bsvn} 修复改的文件提交到 svn 服务器？（改了同一批文件的其他 Bug 会一起提交）`))return;
+  b.disabled=true;try{toast((await post('/api/zentao/svncommit',{id:b.dataset.bsvn})).msg);if(dlg.open)dlg.close();render()}catch(err){toast(err.message);b.disabled=false}})}
 async function fixBugs(ids){     // 点「修复」就是批准：直接进修复队列，进度和异常显示在列表顶部
   try{const r=await post('/api/zentao/fix',{ids});toast(r.msg.split('\n')[0]);if(dlg.open)dlg.close();render()}catch(e){toast(e.message)}}
 let bugIndex={};
@@ -625,6 +630,7 @@ function bindBugs(root){
   root.querySelectorAll('[data-bcol]').forEach(c=>c.onchange=()=>{const k=c.dataset.bcol;bugCols=c.checked?[...new Set([...bugCols,k])]:bugCols.filter(x=>x!==k);
     try{localStorage.setItem('kb.bugCols',JSON.stringify(bugCols))}catch(_){}render()});
   root.querySelectorAll('[data-bfix]').forEach(b=>b.onclick=()=>fixBugs([b.dataset.bfix]));
+  bindSvnCommit(root);
   root.querySelectorAll('[data-bunq]').forEach(a=>a.onclick=async()=>{try{const r=await post('/api/zentao/unfix',{id:a.dataset.bunq});toast(r.msg);render()}catch(e){toast(e.message)}});
   root.querySelectorAll('[data-bfixall]').forEach(b=>b.onclick=()=>fixBugs(b.dataset.bfixall.split(',')));
   root.querySelectorAll('[data-bfx]').forEach(a=>a.onclick=()=>fixDlg(bugIndex[a.dataset.bfx]));
@@ -1201,7 +1207,7 @@ async function stackBox(name){
       <option value="__other">填写地址（本机路径或 user@主机:/路径）…</option>`};
   const need=new Set((v['全栈']||{})['涉及']||[]);
   const ends=v['各端'].map(r=>`<tr ${need.has(r['端'])&&!r['仓库']?'style="background:var(--s4b)"':''}><td><b>${esc(r['端'])}</b>${need.has(r['端'])&&!r['仓库']?'<div class="small" style="color:var(--s4)">方案要做，选仓库</div>':''}</td>
-    <td><select data-send="${esc(r['端'])}" style="max-width:340px">${opts(r)}</select>${r['远程']?' <span class="badge">远程</span>':''}</td>
+    <td><select data-send="${esc(r['端'])}" style="max-width:340px">${opts(r)}</select>${r['远程']?' <span class="badge">远程</span>':''}${r['版本库']==='svn'?' <span class="badge st-收集中" title="svn：AI 只改工作副本、不提交；审查通过、你验收后由知识库提交">svn</span>':''}</td>
     <td>${r['仓库']?`<input type="text" data-sbr="${esc(r['端'])}" value="${esc(r['分支']||'')}" placeholder="${esc(r['当前分支']?'当前 '+r['当前分支']:'开发分支')}" style="width:220px">`:''}</td>
     <td class="small mut">${r['仓库']?esc(r['流程']):''}</td></tr>`).join('');
   const W={小:'st-已完成',中:'st-收集中',大:'st-已暂停2'};
@@ -1244,7 +1250,7 @@ async function stackBox(name){
       <span style="flex:1"></span>${!D.length?'<button class="pri" id="stDev">▶ 各端开工</button>':''}</div>
     ${D.length?`<div class="tw" style="margin-top:6px"><table><tr><th style="width:70px">端</th><th style="width:110px">状态</th><th>汇报</th><th>审查</th><th style="width:120px"></th></tr>
     ${D.map(x=>{const rp=x['汇报']||{},rv=x['审查']||{};return `<tr><td><b>${esc(x['端'])}</b></td>
-      <td><span class="badge ${SB[x['状态']]||''}">${x['在跑']?'● ':''}${esc(x['状态'])}</span>${x['轮次']?`<div class="small mut">第 ${x['轮次']} 轮修改</div>`:''}${x['等待']?`<div class="small mut">等待：${esc(x['等待'])}</div>`:''}${x['用mock']?'<div class="small mut">按契约 mock</div>':''}${x['联调']?'<div class="small mut">联调轮</div>':''}</td>
+      <td><span class="badge ${SB[x['状态']]||''}">${x['在跑']?'● ':''}${esc(x['状态'])}</span>${x['轮次']?`<div class="small mut">第 ${x['轮次']} 轮修改</div>`:''}${x['等待']?`<div class="small mut">等待：${esc(x['等待'])}</div>`:''}${x['用mock']?'<div class="small mut">按契约 mock</div>':''}${x['联调']?'<div class="small mut">联调轮</div>':''}${x['版本库']==='svn'?`<div class="small mut">${x['已提交']?(x['已提交']==='无改动'?'svn 无改动':'svn 已提交 r'+esc(x['已提交'])):'svn：验收时提交'}</div>`:`<div class="small mut">${x['已推送']?(x['已推送'].includes('@')?'已推送 '+esc(x['已推送'].split('@')[0]):esc(x['已推送'])):'验收时推送'}</div>`}</td>
       <td class="small">${rp['总结']?esc(rp['总结']):'<span class="mut">—</span>'}${rp['提交']?`<div class="mono mut">${esc(rp['提交'])}</div>`:''}${rp['证据']?`<details><summary class="mut">证据</summary>${esc(rp['证据'])}</details>`:''}
         ${x['结果']&&['失败','要你看'].includes(x['状态'])?`<div style="color:var(--s4)">${esc(x['结果'])}</div>`:''}</td>
       <td class="small">${rv['结论']?`<span class="badge ${rv['结论']==='通过'?'st-已完成':'st-已暂停'}">${esc(rv['结论'])}</span> ${esc(rv['总结']||'')}
@@ -1262,7 +1268,8 @@ async function stackBox(name){
     const ends=[...box.querySelectorAll('[data-cre]:checked')].map(c=>c.dataset.cre);
     try{toast((await post('/api/stack/change',{period:name,title:t,ends})).msg)}catch(e){toast(e.message)}stackBox(name)};
   box.querySelectorAll('[data-crx]').forEach(a=>a.onclick=async()=>{if(!confirm(`驳回 ${a.dataset.crx}？`))return;try{toast((await post('/api/stack/reject',{period:name,id:a.dataset.crx})).msg)}catch(e){toast(e.message)}stackBox(name)});
-  if($('#stAcc'))$('#stAcc').onclick=async()=>{if(!confirm('验收这一期？看过证据包，确认各端做完（这一期会标为已完成，之后照常处理 Bug）。'))return;
+  if($('#stAcc'))$('#stAcc').onclick=async()=>{const pubE=(v['开发']||[]).filter(x=>x['状态']==='审查通过'&&!(x['版本库']==='svn'?x['已提交']:x['已推送'])).map(x=>x['端']+(x['版本库']==='svn'?'（svn 提交）':'（git 推送）'));
+    if(!confirm('验收这一期？看过证据包，确认各端做完（这一期会标为已完成，之后照常处理 Bug）。'+(pubE.length?`\n\n验收时会把审查通过的端送上服务器：${pubE.join('、')}。svn 只提交这次改的文件，git 只推开发分支。`:'')))return;
     try{toast((await post('/api/stack/accept',{period:name})).msg)}catch(e){toast(e.message)}render()};
   if($('#stDev'))$('#stDev').onclick=async()=>{if(!confirm('各端开工？涉及的端会各起一个 AI 会话按拍板的方案开发（= 你批准开发）。'))return;
     try{toast((await post('/api/stack/dev',{period:name})).msg)}catch(e){toast(e.message)}stackBox(name)};
@@ -1750,7 +1757,7 @@ async function plRunDlg(d,p){
     <label>期 / 分支<div class="combo"><input type="text" id="prT" placeholder="期名，或分支名如 feature-xxx-stable" autocomplete="off"><button type="button" id="prDd" title="选一期" style="width:44px;font-size:12px;line-height:1">▼</button>
       <div class="dd" id="prL" hidden>${T['期'].map(pi).join('')||'<div class="small mut" style="padding:8px">没有进行中的期</div>'}</div></div></label>
     <div class="small" id="prInfo"></div>
-    <label id="prRL" hidden style="display:none">在哪个仓库运行<select id="prR"><option value="">— 选基础信息里的本地工程 —</option>${T['仓库'].map(r=>`<option value="${esc(r['路径'])}" ${r.git?'':'disabled'}>${esc(r['名称'])}　${esc(r['路径'])}${r.git?'':'（不是 git 仓库）'}</option>`).join('')}</select></label>
+    <label id="prRL" hidden style="display:none">在哪个仓库运行<select id="prR"><option value="">— 选基础信息里的本地工程 —</option>${T['仓库'].map(r=>`<option value="${esc(r['路径'])}" ${r.git?'':'disabled'}>${esc(r['名称'])}　${esc(r['路径'])}${r['版本库']==='svn'?'（svn）':r.git?'':'（不是 git / svn 仓库）'}</option>`).join('')}</select></label>
     <div class="small row" style="gap:6px"><input type="checkbox" id="prPush" checked style="width:auto;margin:0"><span>有改动就提交并推送</span></div>
     <div class="row"><button class="pri" id="prGo">运行</button></div>
     <div class="act small" id="prSteps" style="white-space:pre-wrap"></div></div>`);

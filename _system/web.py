@@ -816,6 +816,8 @@ class H(BaseHTTPRequestHandler):
         if u.path == '/api/zentao/fixed':
             return self._guard(lambda: {'msg': kb.bug_fixed(str(body.get('id', '')), body.get('done', True) is not False,
                                                             body.get('commits') or [], body.get('note', ''), by='用户（网页）')})
+        if u.path == '/api/zentao/svncommit':
+            return self._guard(lambda: {'msg': kb.bug_svn_commit(str(body.get('id', '')))})
         if u.path == '/api/zentao/unfix':
             return self._guard(lambda: {'msg': kb.bug_unfix(str(body.get('id', '')))})
         if u.path == '/api/zentao/review':

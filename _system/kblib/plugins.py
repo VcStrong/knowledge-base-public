@@ -121,11 +121,24 @@ def remove_plugin_dir(pid):
 
 
 def _git_changed(root):
-    """仓库里有改动的文件 → 内容摘要（插件运行前后对比，找出插件改了哪些文件）。"""
-    r = _devprep._git(root, 'status', '--porcelain', '-uall')
+    """仓库里有改动的文件 → 内容摘要（插件运行前后对比，找出插件改了哪些文件）。git 仓库和 svn 工作副本都行。"""
+    root = Path(root)
+    if (root / '.svn').exists() and not (root / '.git').exists():
+        r = subprocess.run(['svn', '--non-interactive', 'status', '--depth', 'infinity'], cwd=root, capture_output=True, text=True, timeout=120)
+        names = []
+        for ln in r.stdout.splitlines() if r.returncode == 0 else []:
+            if len(ln) <= 8 or not (ln[0] in '?AMDR!~C' or ln[1] == 'M'):
+                continue
+            f = ln[8:].strip()
+            if ln[0] == '?' and (root / f).is_dir():      # 没纳入版本控制的新目录：svn 只列目录，这里展开成文件
+                names += [str(x.relative_to(root)) for x in (root / f).rglob('*') if x.is_file()]
+            elif not (root / f).is_dir():
+                names.append(f)
+    else:
+        r = _devprep._git(root, 'status', '--porcelain', '-uall')
+        names = [ln[3:].split(' -> ')[-1].strip('"') for ln in r.stdout.splitlines()] if r.returncode == 0 else []
     out = {}
-    for ln in r.stdout.splitlines() if r.returncode == 0 else []:
-        f = ln[3:].split(' -> ')[-1].strip('"')
+    for f in names:
         try:
             out[f] = hashlib.md5((Path(root) / f).read_bytes()).hexdigest()
         except OSError:

@@ -252,7 +252,7 @@ TOOLS = [
      S(iteration=STR('期名'), end=STR('服务端 / Web / iOS / Android / 鸿蒙'), verdict=STR('通过 / 打回'),
        issues=STR('JSON 列表：[{"需求": "REQ-001", "严重度": "高/中/低", "问题": "…", "位置": "文件:行"}]'), summary=STR('一两句')),
      ['iteration', 'end', 'verdict']),
-    ('kb_repo_read', '只读查看某个端的代码仓库（本机或远程机器都行，远程走 ssh）：ls / tree / cat / grep / find / git-log / git-show。'
+    ('kb_repo_read', '只读查看某个端的代码仓库（本机或远程机器都行，远程走 ssh）：ls / tree / cat / grep / find / git-log / git-show（svn 工作副本自动换成 svn log）。'
                      '远程仓库没法直接读文件时用它；本机仓库直接读也可以。',
      S(repo=STR('仓库地址，如 /Users/me/app 或 user@host:/srv/app'), op=STR('ls / tree / cat / grep / find / git-log / git-show'),
        arg=STR('路径（相对仓库根目录）/ 搜索词 / 文件名通配 / 提交号')), ['repo', 'op']),
@@ -283,7 +283,8 @@ TOOLS = [
      ['id', 'summary']),
     ('kb_bug_fixed', '在知识库里标记 Bug 修好了（或没修成），附提交号和说明。只记在知识库，不改 Bug 平台。修复会话改完提交后用；用户说某个 Bug 已经修了也用它。',
      S(id=STR('Bug 编号'), done={'type': 'boolean', 'description': 'true = 修好了；false = 没修成（note 写原因）'},
-       commits={'type': 'array', 'items': {'type': 'string'}, 'description': '修复的提交号'}, note=STR('改了什么、怎么验证的、还要人工确认什么 / 没修成的原因')),
+       commits={'type': 'array', 'items': {'type': 'string'}, 'description': '修复的提交号（git）'},
+       files={'type': 'array', 'items': {'type': 'string'}, 'description': 'svn 仓库：这个 Bug 改的文件（相对仓库根，不要 svn commit，用户在网页确认后提交）'}, note=STR('改了什么、怎么验证的、还要人工确认什么 / 没修成的原因')),
      ['id']),
     ('kb_bug_sync', '立即同步 Bug 平台（禅道、Jira…）的 Bug 索引，以及崩溃平台（Sentry、Firebase、Bugly…）到 ANR / 崩溃（平时 15 分钟自动同步一次）。',
      S(source=STR('只同步这个平台（空 = 全部）')), []),
@@ -420,7 +421,7 @@ def _call_tool(name, a):
         return bug_analysis(str(g('id')), g('summary') or '', g('locations'), g('cause') or '', g('fix') or '', g('impact') or '',
                             g('selftest') or '', g('confidence') or '', g('missing') or '')
     if name == 'kb_bug_fixed':
-        return bug_fixed(str(g('id')), g('done') is not False, g('commits'), g('note') or '')
+        return bug_fixed(str(g('id')), g('done') is not False, g('commits'), g('note') or '', files=g('files'))
     if name in ('kb_bug_sync', 'kb_zentao_sync'):
         return bug_sync(by='Claude', only=g('source') or '')
     if name == 'kb_fix_link':

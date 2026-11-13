@@ -698,7 +698,7 @@ def zentao_bugs_json(period='', owner=''):
         x['分析'] = {k: a.get(k) for k in ('摘要', '状态', '过时', '置信度', '时间', '意见')} if a else None
         x['分析中'] = e['编号'] in run
         f = e.get('修复')
-        x['修复'] = {k: f.get(k) for k in ('状态', '时间', '提交', '说明', '标记', '等待', '阻塞')} if f else None
+        x['修复'] = {k: f.get(k) for k in ('状态', '时间', '提交', '说明', '标记', '等待', '阻塞', '待提交')} if f else None
         out.append(x)
     return out
 
