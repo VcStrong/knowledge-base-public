@@ -46,7 +46,7 @@ git clone <仓库地址> ~/knowledge-base && cd ~/knowledge-base
 
 ## 仓库里有什么
 
-只有程序、说明文档和通用插件：`kb`、`install.sh`、`_system/`、`插件/工作统计/`、两份 `.md`。`.gitignore` 用白名单，期、基础信息、设置、索引都不会进仓库。
+只有程序、说明文档和通用插件：`kb`、`install.sh`、`_system/`、`插件/`（工作统计、Jenkins、Hermes会话）、两份 `.md`。`.gitignore` 用白名单，期、基础信息、设置、索引都不会进仓库。
 
 改进知识库后提交推送，其他电脑 `git pull` 即可：
 
