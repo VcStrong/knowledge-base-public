@@ -1,7 +1,7 @@
-"""全栈：一期挂多个端的仓库（服务端 / Web / iOS / Android / 鸿蒙），AI 先出「需求规格 + 设计对照 + 影响分析 + 接口契约」，你拍板后各端再开工。
+"""全栈：一期挂多个端的仓库（服务端 / Web / iOS / Android / 鸿蒙 / 小程序 / 桌面端，也可以自定义如 Unity），AI 先出「需求规格 + 设计对照 + 影响分析 + 接口契约」，你拍板后各端再开工。
 
 一人全栈的第一道关卡（拍板 1）：
-  1. 各端仓库：期信息「各端」{端: {仓库, 分支}}；仓库从基础信息里的本地路径、登记的仓库、各期用过的开发仓库里选，按仓库里的文件自动认端。
+  1. 各端仓库：期信息「各端」{端: {仓库, 分支}}，只放这一期加了的端；仓库从基础信息里的本地路径、登记的仓库、各期用过的开发仓库里选，按仓库里的文件自动认端。
   2. 出方案：后台只读会话读这一期资料和各端代码，用 kb_stack_plan 交回「方案」（涉及哪些端、各端改什么、接口、待确认）
      和接口契约草案（OpenAPI YAML）。存在 期/<名>/全栈/方案.json、全栈/api/openapi.yaml。
   3. 拍板（只能你在网页上点）：契约锁成 api/openapi.v<N>.yaml，之后各端按这个版本开发；要改就提意见重出方案。
@@ -26,8 +26,9 @@ from kblib import lazy
 _stackdev = lazy('kblib.stack.dev')      # 上层模块：用到时才 import
 _fix = lazy('kblib.bugs.fix')
 
-ENDS = REPO_ENDS
+ENDS = REPO_ENDS               # 常用平台（候选和排序）；端名不限于这些，见 end_name
 STACK_DIR = '全栈'
+_END_BAD = re.compile(r'[/\\·、，,;；:：|\s]')
 _PROCS = {}
 
 _WEB_DEPS = ('react', 'vue', 'next', 'nuxt', 'svelte', '@angular/core', 'vite', 'umi')
@@ -37,6 +38,30 @@ _PATS = {'鸿蒙': ['oh-package.json5', 'build-profile.json5', 'AppScope/app.jso
          'iOS': ['*.xcodeproj', '*.xcworkspace', 'Podfile', '*/*.xcodeproj', 'Package.swift'],
          '服务端': ['pom.xml', 'go.mod', 'Cargo.toml', 'composer.json', 'pyproject.toml', 'requirements.txt', 'manage.py',
                   'src/main/java', 'src/main/kotlin', 'src/main/resources/application.yml', 'src/main/resources/application.properties']}
+
+
+def end_name(end):
+    """校验端名：常用平台原样（大小写不同的归一，android → Android）；自定义端去首尾空格、最多 20 字、不含分隔符。"""
+    e = (end or '').strip()
+    if not e:
+        raise KBError('端名不能为空')
+    hit = next((x for x in ENDS if x.lower() == e.lower()), None)
+    if hit:
+        return hit
+    if len(e) > 20:
+        raise KBError(f'端名太长（最多 20 个字）：{e}')
+    if _END_BAD.search(e) or e.startswith('__'):
+        raise KBError(f'端名不能含空格和 / · 、 , ; : | 这类分隔符：{e}')
+    return e
+
+
+def end_key(end):
+    """端的排序：常用平台按 ENDS 的顺序，自定义端排在后面（按名字）。"""
+    return (ENDS.index(end), '') if end in ENDS else (len(ENDS), end or '')
+
+
+def sort_ends(ends):
+    return sorted(ends, key=end_key)
 
 
 def detect_ends(loc):
@@ -88,7 +113,39 @@ def stack_repos():
         if not kind:
             continue
         out.append({'路径': pth, '名称': nm, '端': detect_ends(pth), '版本库': kind, '分支': hosts.branch_of(pth, kind)})
-    return sorted(out, key=lambda x: (ENDS.index(x['端'][0]) if x['端'] else 9, x['名称']))
+    return sorted(out, key=lambda x: (end_key(x['端'][0]) if x['端'] else (99, ''), x['名称']))
+
+
+def stack_branches(repo):
+    """仓库可选的分支（网页分支框的下拉）：git 本地 + 远程分支（去掉 origin/ 前缀、去重），svn 是 trunk + branches/*。
+    → {'当前': 当前分支, '分支': [...]}；读不到（远程连不上、svn 服务器要登录）返回空列表，不报错，手动填就行。"""
+    repo = (repo or '').strip()
+    if not repo:
+        raise KBError('没有仓库路径')
+    try:
+        kind = hosts.vcs(repo)
+        cur = hosts.branch_of(repo, kind) if kind else ''
+        out = []
+        if kind == 'git':
+            p = hosts.git(repo, 'for-each-ref', '--sort=-committerdate', '--format=%(refname)', 'refs/heads', 'refs/remotes', timeout=20)
+            for ln in p.stdout.splitlines():
+                ln = ln.strip()
+                if ln.startswith('refs/heads/'):
+                    out.append(ln[len('refs/heads/'):])
+                elif ln.startswith('refs/remotes/') and not ln.endswith('/HEAD'):
+                    out.append(ln[len('refs/remotes/'):].split('/', 1)[-1])
+        elif kind == 'svn':
+            out.append('trunk')
+            p = hosts.svn(repo, 'ls', '^/branches', timeout=20)
+            if p.returncode == 0:
+                out += ['branches/' + x.strip().rstrip('/') for x in p.stdout.splitlines() if x.strip()]
+    except KBError:
+        return {'当前': '', '分支': []}
+    seen = []
+    for b in ([cur] if cur else []) + out:
+        if b and b not in seen:
+            seen.append(b)
+    return {'当前': cur, '分支': seen[:200]}
 
 
 def period_ends(d, m=None):
@@ -103,9 +160,9 @@ def period_ends(d, m=None):
 
 
 def stack_set_end(name, end, repo='', branch='', by='用户（网页）'):
-    """设这一期某个端的仓库和分支；repo 为空 = 这一期不涉及这个端。"""
-    if end not in ENDS:
-        raise KBError(f'端只能是：{"、".join(ENDS)}')
+    """设这一期某个端的仓库和分支；repo 为空 = 这一期不涉及这个端（从「各端」里移除）。
+    端可以是常用平台，也可以是自定义的名字（见 end_name）。新选的仓库没填分支时，自动填它的当前分支。"""
+    end = end_name(end)
     d = period_dir(name)
     m = load_meta(d)
     ends = period_ends(d, m)
@@ -114,6 +171,11 @@ def stack_set_end(name, end, repo='', branch='', by='用户（网页）'):
         rp = hosts.check_repo(repo)          # 路径不存在 / 不是 git 仓库或 svn 工作副本 / 远程连不上 都在这里报
         kind = hosts.vcs(rp)
         branch = (branch or '').strip()
+        if not branch and (ends.get(end) or {}).get('仓库') != rp:     # 新选的仓库：git 用当前分支，svn 用当前 URL 对应的 trunk / branches/xxx
+            try:
+                branch = hosts.branch_of(rp, kind)
+            except KBError:
+                branch = ''
         if kind == 'svn' and branch:
             branch = hosts.svn_branch(rp, branch)        # feat-x → branches/feat-x（服务器上没有就报错）
         ends[end] = {'仓库': rp, '分支': branch, '版本库': kind}
@@ -154,8 +216,7 @@ def repo_set(path, end=None, flow=None, by='用户（网页）'):
         raise KBError('没有工程路径')
     kv, said = {}, []
     if end is not None:
-        if end and end not in ENDS:
-            raise KBError(f'端只能是：{"、".join(ENDS)}')
+        end = end_name(end) if (end or '').strip() else ''
         kv['端'] = end
         said.append(f'端：{end or "自动识别"}')
     if flow is not None:
@@ -190,6 +251,9 @@ def _incr_rule(d):
 
 
 def _plan_prompt(d, ends, note):
+    names = '/'.join(sort_ends(ends)) or '/'.join(ENDS[:5])
+    common = '、'.join(ENDS)
+    others = '、'.join(e for e in ENDS if e not in ends) or '其他平台'
     rows = '\n'.join(f'- {e}：{v["仓库"]}' + (f'（分支 {v["分支"]}）' if v.get('分支') else '')
                      + ('　← 在远程机器上：用 kb_repo_read（repo 填这个地址）列目录、读文件、搜索' if hosts.is_remote(v['仓库']) else '')
                      for e, v in ends.items())
@@ -209,7 +273,8 @@ def _plan_prompt(d, ends, note):
 2. 设计稿对照：看这一期「设计图」里的图（kb_period 里有路径，图片直接读；PSD 已转成同名 .png 预览；蓝湖只有链接的看不到，记进「无法核对」）。
    如果你能用 Figma 的 MCP 工具，也可以直接看资料里的 Figma 链接。逐条需求找对应的画板，列出：需求有、设计没画的；设计画了、需求没写的；
    页面缺的状态（空态 / 加载 / 报错 / 无网 / 权限等）；各端设计不一致的地方。没有设计稿就在「无法核对」里写明。
-3. 影响分析：判断每个端是否涉及、为什么、要改什么（落到模块 / 页面 / 类，基于读到的代码，不要泛泛而谈）。上面没列出仓库的端也要判断是否需要（需要的话在待确认里提出来）。
+3. 影响分析：判断每个端是否涉及、为什么、要改什么（落到模块 / 页面 / 类，基于读到的代码，不要泛泛而谈）。上面没列出仓库的端也要判断是否需要
+   （需要的话在「各端」里加一项、涉及 true，并在待确认里提出来；端名用上面的名字，常用的还有 {common}，别的平台直接写名字，如 Unity）。
 4. 接口契约：需要新增或修改服务端接口时，先在服务端仓库里找现有接口的写法（路由、鉴权、返回包装、错误码、分页），按同样的约定写 OpenAPI 3 YAML。
    客户端已有接口复用的也列出来（标「复用」）。不需要接口就不写 openapi。接口的说明里写上对应的需求编号。
 5. 待确认：需求说不清、设计和需求对不上、要用户拍板的点，每条给出你的建议（用户开了免打扰时会直接按建议走）。
@@ -221,7 +286,7 @@ def _plan_prompt(d, ends, note):
    "需求": [{{"编号": "REQ-001", "标题": "…", "描述": "…", "验收": ["当…时，应…", …], "端": ["Android", "服务端"], "设计": ["对应的画板 / 图片文件名"], "来源": "资料里的出处（文件名或链接）"}}],
    "设计对照": {{"缺设计": ["REQ-003：…"], "设计多出": ["画板 xx 里的 …，需求没写"], "缺状态": [{{"页面": "…", "缺": "空态 / 加载 / 报错 / 无网 / 权限…"}}],
               "端不一致": ["…"], "无法核对": "没有设计稿 / 蓝湖只有链接 等（都核对了就留空）"}},
-   "各端": [{{"端": "服务端/Web/iOS/Android/鸿蒙", "涉及": true, "原因": "…", "改动": ["模块或文件：改什么（REQ-001）", …], "工作量": "小/中/大", "风险": "…"}}],
+   "各端": [{{"端": "{names}（这一期加了的端；没加仓库但需要的端也可以写，如 {others}）", "涉及": true, "原因": "…", "改动": ["模块或文件：改什么（REQ-001）", …], "工作量": "小/中/大", "风险": "…"}}],
    "接口": [{{"方法": "GET", "路径": "/api/…", "说明": "…（REQ-001）", "类型": "新增/修改/复用", "调用端": ["iOS", "Android"]}}],
    "数据": ["表 / 字段 / 缓存 / 配置的变化"],
    "待确认": [{{"问题": "…", "建议": "…"}}]}}
@@ -331,9 +396,10 @@ def stack_plan_submit(name, plan, openapi='', by='Claude'):
             raise KBError(f'plan 不是合法 JSON：{e}')
     if not isinstance(plan, dict) or not isinstance(plan.get('各端'), list):
         raise KBError('plan 至少要有「各端」列表')
-    bad = [x.get('端') for x in plan['各端'] if x.get('端') not in ENDS]
-    if bad:
-        raise KBError(f'端只能是：{"、".join(ENDS)}；不认识：{bad}')
+    for x in plan['各端']:
+        if not isinstance(x, dict):
+            raise KBError('「各端」每一项要是 {"端": …, "涉及": …}')
+        x['端'] = end_name(x.get('端'))
     openapi = (openapi or '').strip()
     if openapi and not re.search(r'^\s*(openapi|swagger)\s*:', openapi, re.M):
         raise KBError('openapi 要是 OpenAPI 3 的 YAML（开头 openapi: 3.x）')
@@ -410,10 +476,7 @@ def stack_change_add(name, title, detail='', ends=None, by='用户（网页）')
     title = (title or '').strip()
     if not title:
         raise KBError('变更要写一句是什么')
-    ends = [e for e in (ends if isinstance(ends, list) else [x for x in re.split(r'[、,，\s]+', ends or '') if x]) if e]
-    bad = [e for e in ends if e not in ENDS]
-    if bad:
-        raise KBError(f'端只能是：{"、".join(ENDS)}')
+    ends = [end_name(e) for e in (ends if isinstance(ends, list) else [x for x in re.split(r'[、,，\s]+', ends or '') if x]) if (e or '').strip()]
     m = load_meta(d)
     xs = m.setdefault('全栈变更', [])
     cid = f'CR-{len(xs) + 1:03d}'
@@ -463,8 +526,9 @@ def stack_get(name):
             plan = None
     api = sd / 'api' / 'openapi.yaml'
     ends = period_ends(d, m)
+    need = list((m.get('全栈') or {}).get('涉及') or []) + [x.get('端') for x in (plan or {}).get('各端') or [] if isinstance(x, dict) and x.get('涉及')]
     rows = []
-    for e in ENDS:
+    for e in sort_ends(set(ends) | {x for x in need if x}):      # 只列加了的端 + 方案要做但还没加仓库的端
         v = ends.get(e)
         if v:
             remote = hosts.is_remote(v['仓库'])
@@ -473,10 +537,10 @@ def stack_get(name):
             cur = '' if remote else hosts.branch_of(v['仓库'], kind) if Path(v['仓库']).is_dir() else ''
             rows.append({'端': e, '仓库': v['仓库'], '显示': hosts.label(v['仓库']), '远程': remote, '分支': v.get('分支', ''), '当前分支': cur,
                          '版本库': kind,
-                         '流程': '（远程：开工时在那台机器上匹配）' if remote else f['名称'] if f else '（没有匹配的流程）', '来自': v.get('来自', '')})
+                         '流程': '（远程：开工时在那台机器上匹配）' if remote else f['名称'] if f else '（没有匹配的流程：按仓库现有约定）', '来自': v.get('来自', '')})
         else:
-            rows.append({'端': e})
-    return {'各端': rows, '状态': (m.get('全栈') or {}).get('状态', ''), '全栈': m.get('全栈') or {},
+            rows.append({'端': e, '待添加': True})
+    return {'各端': rows, '常用平台': list(ENDS), '状态': (m.get('全栈') or {}).get('状态', ''), '全栈': m.get('全栈') or {},
             '会话': {k: s.get(k) for k in ('状态', '开始时间', '结束时间', '引擎', '结果', '意见')} if s else None,
             '方案': plan, '契约': api.read_text('utf-8') if api.exists() else '', '契约路径': str(api) if api.exists() else '',
             '规格路径': str(spec) if spec.exists() else '', '开发': _stackdev.stack_dev_view(d, m),

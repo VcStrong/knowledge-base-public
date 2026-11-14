@@ -100,7 +100,7 @@ async function settingsPage(){
       某一期在开发面板单独选了流程以那一期为准；事项默认用轻量流程。在全栈「各端」里给某端选了认不出的工程，也会记到这里。</p>
     <div class="tw"><table><tr><th>工程</th><th style="width:180px">端</th><th style="width:230px">默认流程</th></tr>
       ${rp.items.map(r=>`<tr><td><b>${esc(r['名称'])}</b>${r['分支']?` <span class="small mut">${esc(r['分支'])}</span>`:''}<div class="small mut mono">${esc(r['路径'].replace(/^\/Users\/[^/]+/,'~'))}</div></td>
-        <td><select data-rpend="${esc(r['路径'])}"><option value="">自动${r['远程']?'':r['识别端'].length?'（'+esc(r['识别端'].join(' / '))+'）':'（认不出）'}</option>${rp.ends.map(e=>`<option ${e===r['端']?'selected':''}>${esc(e)}</option>`).join('')}</select></td>
+        <td><select data-rpend="${esc(r['路径'])}"><option value="">自动${r['远程']?'':r['识别端'].length?'（'+esc(r['识别端'].join(' / '))+'）':'（认不出）'}</option>${(r['端']&&!rp.ends.includes(r['端'])?rp.ends.concat([r['端']]):rp.ends).map(e=>`<option ${e===r['端']?'selected':''}>${esc(e)}</option>`).join('')}</select></td>
         <td><select data-rpflow="${esc(r['路径'])}"><option value="">自动</option>${d.flows.map(f=>`<option value="${esc(f.id)}" ${f.id===r['默认流程']?'selected':''}>${esc(f['名称'])}</option>`).join('')}</select></td></tr>`).join('')}</table></div>`:''}
     ${sw?`<h2>🤖 管家</h2>
     <p class="mut">管家每 5 分钟巡检一次：<b>明确又能重做的事自己做</b>（下面勾选的）；<b>你点了就等于批准的</b>（拍板、开工、验收、推动、修复、svn 提交）只提醒你，从不代点；<b>拿不准的</b>只问你一个问题。每天早上 8 点后出一份日报。</p>

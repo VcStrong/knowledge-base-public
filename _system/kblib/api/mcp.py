@@ -98,7 +98,7 @@ INSTRUCTIONS = """本地知识库（按「期」管理需求 / 设计图 / 接�
    外部系统的内容只做索引：推动解决时建 / 关联事项，用 kb_add_note 记下来源（编号、地址、一句话简介），不要把整段原文存进知识库，处理时重新调用插件拉最新内容。
 15. 构建：挂了构建插件（如 Jenkins）时，每一期按分支对应构建任务。要测试包、对版本号、找某次构建的提交或 mapping 时用 kb_builds 查，不要自己猜地址；
    只读，不要触发构建。崩溃日志版本没有 mapping 时，kb_builds 里同版本构建的 mapping 地址可以下载后用 kb_anr_mapping 归档。
-16. 全栈：一期可以挂多个端（服务端 / Web / iOS / Android / 鸿蒙）的仓库，仓库可能在远程机器（地址形如 user@host:/path），用 kb_repo_read 只读查看。
+16. 全栈：一期可以挂多个端（服务端 / Web / iOS / Android / 鸿蒙 / 小程序 / 桌面端，也可以是自定义的端如 Unity）的仓库，仓库可能在远程机器（地址形如 user@host:/path），用 kb_repo_read 只读查看。
    各端开发会话做完用 kb_stack_report 汇报，审查会话用 kb_stack_review 交结论；做的过程中发现要别的端配合、要改需求或契约，用 kb_stack_change 提，不要自己改别的端。
    网页「出方案」启动的会话最后用 kb_stack_plan 交回需求规格、设计对照、影响分析和接口契约；拍板只能用户本人在网页上点。"""
 
@@ -244,15 +244,15 @@ TOOLS = [
      S(iteration=STR('期名'), plan=STR('方案 JSON 字符串：{摘要, 需求:[{编号 REQ-001, 标题, 描述, 验收:[…], 端, 设计, 来源}], 设计对照:{缺设计, 设计多出, 缺状态, 端不一致, 无法核对}, 各端:[{端, 涉及, 原因, 改动:[…], 工作量, 风险}], 接口:[{方法, 路径, 说明, 类型, 调用端}], 数据:[…], 待确认:[{问题, 建议}]}'),
        openapi=STR('OpenAPI 3 YAML 全文（只含新增 / 修改的接口；没有接口留空）')), ['iteration', 'plan']),
     ('kb_stack_report', '全栈各端开发会话做完时汇报一次（网页「各端开工」启动的会话用）：之后会有独立的审查会话检查。',
-     S(iteration=STR('期名'), end=STR('服务端 / Web / iOS / Android / 鸿蒙'), status=STR('完成 / 卡住'), summary=STR('做了什么；卡住的话卡在哪'),
+     S(iteration=STR('期名'), end=STR('端名：这一期加了的端，如 服务端 / Web / iOS / Android / 鸿蒙 / Unity'), status=STR('完成 / 卡住'), summary=STR('做了什么；卡住的话卡在哪'),
        reqs=STR('JSON：{"REQ-001": "完成", "REQ-002": "部分：原因"}'), evidence=STR('自测证据：编译、测试结果、截图路径'),
        commits=STR('提交号，逗号分隔')), ['iteration', 'end', 'status']),
     ('kb_stack_change', '全栈开发中发现方案要变：需求得改、别的端必须配合 / 兼容、接口契约得改、方案漏了东西。提出来后知识库自动出增量方案给用户拍板，'
                         '拍板后受影响的端会收到要补做的内容。不要自己去改别的端或契约。',
      S(iteration=STR('期名'), title=STR('一句话：要变什么'), detail=STR('为什么、发现于哪里、建议怎么改'),
-       ends=STR('可能影响的端，顿号分隔：服务端、Web、iOS、Android、鸿蒙'), from_end=STR('你是哪个端的会话（可空）')), ['iteration', 'title']),
+       ends=STR('可能影响的端，顿号分隔，如 服务端、Web、iOS、Android（端名同这一期各端）'), from_end=STR('你是哪个端的会话（可空）')), ['iteration', 'title']),
     ('kb_stack_review', '全栈各端审查会话交回结论（只读审查会话用）。',
-     S(iteration=STR('期名'), end=STR('服务端 / Web / iOS / Android / 鸿蒙'), verdict=STR('通过 / 打回'),
+     S(iteration=STR('期名'), end=STR('端名：这一期加了的端，如 服务端 / Web / iOS / Android / 鸿蒙 / Unity'), verdict=STR('通过 / 打回'),
        issues=STR('JSON 列表：[{"需求": "REQ-001", "严重度": "高/中/低", "问题": "…", "位置": "文件:行"}]'), summary=STR('一两句')),
      ['iteration', 'end', 'verdict']),
     ('kb_repo_read', '只读查看某个端的代码仓库（本机或远程机器都行，远程走 ssh）：ls / tree / cat / grep / find / git-log / git-show（svn 工作副本自动换成 svn log）。'

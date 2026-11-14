@@ -14,8 +14,9 @@ def load_repos():
     return json.loads(REPOS_FILE.read_text('utf-8')) if REPOS_FILE.exists() else {}
 
 
-# 各端：工程（代码仓库）属于哪一端。全栈、事项选工程、按端分配 AI 都用这一份
-REPO_ENDS = ('服务端', 'Web', 'iOS', 'Android', '鸿蒙')
+# 各端：工程（代码仓库）属于哪一端。这里是「常用平台」（全栈添加端时的候选、排序、设置里的下拉）；
+# 一期也可以加自定义端（Unity、嵌入式、脚本…），见 stack/plan.py end_name
+REPO_ENDS = ('服务端', 'Web', 'iOS', 'Android', '鸿蒙', '小程序', '桌面端')
 
 
 def _repo_key(path):

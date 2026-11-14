@@ -13,6 +13,11 @@ def _get_api_stack_repos(self, u, q):
     return self._guard(lambda: {'items': kb.stack_repos(), 'ends': list(kb.ENDS)})
 
 
+@get('/api/stack/branches')
+def _get_api_stack_branches(self, u, q):
+    return self._guard(lambda: kb.stack_branches(q.get('repo', '')))
+
+
 @post('/api/stack/end', page_only=True)
 def _post_api_stack_end(self, u, n, body):
     return self._guard(lambda: {'msg': kb.stack_set_end(body.get('period', ''), body.get('end', ''), body.get('repo', ''), body.get('branch', ''))})

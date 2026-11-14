@@ -28,7 +28,7 @@ from kblib.infra import hosts
 from kblib.ai.devsession import DEV_DIR, _NO_BG, _alive, _dev_env, _dev_result, _notify, _session_id
 from kblib.ai.engines import engine_cmd, engine_popen, role_engine
 from kblib.ai.flows import flow_for, flow_text
-from kblib.stack.plan import ENDS, _sdir, period_ends
+from kblib.stack.plan import _sdir, period_ends, sort_ends
 
 MAX_PAR = 2              # 同时开发的端（审查是只读的，不占这个名额）
 MAX_ROUNDS = 2           # 审查打回后自动改的轮数
@@ -145,12 +145,12 @@ def stack_tick(only=''):
                     _finish(d.name, e, x['状态'])
             m = load_meta(d)
             dev = m.get('各端开发') or {}
-            for e in [e for e in ENDS if (dev.get(e) or {}).get('状态') == '待审查']:
+            for e in [e for e in sort_ends(dev) if (dev.get(e) or {}).get('状态') == '待审查']:
                 _start_review(d, e)
             m = load_meta(d)
             dev = m.get('各端开发') or {}
             busy = sum(1 for x in dev.values() if x.get('状态') == '开发中')
-            for e in [e for e in ENDS if (dev.get(e) or {}).get('状态') in ('排队中', '打回修改')]:
+            for e in [e for e in sort_ends(dev) if (dev.get(e) or {}).get('状态') in ('排队中', '打回修改')]:
                 if busy >= MAX_PAR:
                     break
                 why = _repo_free(d, e, dev[e]['仓库'], dev)
@@ -643,7 +643,7 @@ def _remote_popen(d, end, root, eng, prompt, title, logf, resume, readonly):
 def stack_dev_view(d, m):
     dev = m.get('各端开发') or {}
     out = []
-    for e in ENDS:
+    for e in sort_ends(dev):
         x = dev.get(e)
         if not x:
             continue
